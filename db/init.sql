@@ -61,7 +61,7 @@ CREATE TABLE admin (
     haslo VARCHAR(255)
 );
 
--- przyk³adowe dane
+-- SAMPLE DATA
 INSERT INTO lekarz (imie, nazwisko, specjalizacja, adres, opis)
 VALUES ('Jan', 'Kowalski', 'Kardiolog', 'Warszawa, ul. Okopowa 1', 'Specjalista serca');
 

@@ -18,5 +18,5 @@ app.get("/api/lekarze", async (req, res) => {
 });
 
 app.listen(3000, () => {
-    console.log("Backend running on port 3000");
+    console.log("Backend working on port 3000");
 });
