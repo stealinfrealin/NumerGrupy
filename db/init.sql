@@ -57,7 +57,7 @@ CREATE TABLE ocena (
 -- ADMIN
 CREATE TABLE admin (
     id INT AUTO_INCREMENT PRIMARY KEY,
-    email VARCHAR(150),
+    email VARCHAR(150) UNIQUE,
     haslo VARCHAR(255)
 );
 
@@ -67,3 +67,5 @@ VALUES ('Jan', 'Kowalski', 'Kardiolog', 'Warszawa, ul. Okopowa 1', 'Specjalista 
 
 INSERT INTO termin (data, godzina, dostepny, lekarz_id)
 VALUES ('2026-05-01', '10:00:00', true, 1);
+
+INSERT INTO admin (email, haslo) VALUES ('admin@mdoktor.pl', '$2a$12$00//TZnX5TuoJyK7C6Ma0OKxnH6blssWF1Q9E.xlWWYRChHDc.K0G'); 
