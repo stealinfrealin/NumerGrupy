@@ -40,3 +40,4 @@ services:
 networks:
   med-net:
     driver: bridge
+
