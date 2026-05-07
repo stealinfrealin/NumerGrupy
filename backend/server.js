@@ -1,9 +1,9 @@
 /**
  * Required environment variables (.env):
  * PORT=3000
- * DB_HOST=localhost
+ * DB_HOST=db
  * DB_USER=root
- * DB_PASSWORD=your_password
+ * DB_PASSWORD=root
  * DB_NAME=med_system
  * JWT_SECRET=your_very_secret_jwt_key
  * NODE_ENV=production
