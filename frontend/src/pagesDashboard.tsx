@@ -22,8 +22,20 @@ export default function PatientDashboard() {
   const [ratingModal, setRatingModal] = useState<{ open: boolean; appointmentId: number | null }>({ open: false, appointmentId: null });
   const [ratingValue, setRatingValue] = useState(5);
 
+  const [specializationQuery, setSpecializationQuery] = useState("");
+  const [cityQuery, setCityQuery] = useState("");
+  const [lastNameQuery, setLastNameQuery] = useState("");
+  const [sortBy, setSortBy] = useState("nazwisko");
+  const [sortOrder, setSortOrder] = useState("ASC");
+
   // 🛡️ GUARD: Nie renderuj nic, dopóki user nie zostanie potwierdzony
   if (!user) return <div style={{ padding: "2rem", textAlign: "center" }}>⏳ Ładowanie profilu pacjenta...</div>;
+
+  useEffect(() => {
+    if (activeTab === "search") {
+      searchDoctors();
+    }
+  }, [sortBy, sortOrder]);
 
   useEffect(() => {
     if (activeTab === "appointments") fetchAppointments();
@@ -41,13 +53,42 @@ export default function PatientDashboard() {
   };
 
   const searchDoctors = async () => {
-    setLoading(true); setError(null);
-    try {
-      const res = await fetch(`/api/doctors?search=${encodeURIComponent(searchQuery)}`, { credentials: "include" });
-      if (res.ok) setDoctors(await res.json());
-    } catch { setError("Błąd wyszukiwania."); }
-    setLoading(false);
-  };
+  setLoading(true);
+  setError(null);
+
+  const params = new URLSearchParams();
+
+  if (specializationQuery.trim()) {
+    params.append("specjalizacja", specializationQuery.trim());
+  }
+
+  if (cityQuery.trim()) {
+    params.append("miasto", cityQuery.trim());
+  }
+
+  if (lastNameQuery.trim()) {
+    params.append("nazwisko", lastNameQuery.trim());
+  }
+
+  params.append("sortBy", sortBy);
+  params.append("order", sortOrder);
+
+  try {
+    const res = await fetch(`/api/doctors?${params.toString()}`, {
+      credentials: "include",
+    });
+
+    if (res.ok) {
+      setDoctors(await res.json());
+    } else {
+      setError("Nie udało się wyszukać lekarzy.");
+    }
+  } catch {
+    setError("Błąd wyszukiwania.");
+  }
+
+  setLoading(false);
+};
 
   const fetchTerminy = async (doctorId: number) => {
 	setLoading(true);
@@ -173,7 +214,10 @@ export default function PatientDashboard() {
         <section>
           <h2>Wyszukiwanie lekarza</h2>
           <div style={{ display: "flex", gap: "0.5rem", marginBottom: "1rem" }}>
-            <input type="text" placeholder="Specjalizacja lub nazwisko..." value={searchQuery} onChange={e => setSearchQuery(e.target.value)} style={{ flex: 1, padding: "0.5rem", borderRadius: "4px", border: "1px solid #ccc" }} />
+            <input type="text" placeholder="Specjalizacja, np. Kardiolog" value={specializationQuery} onChange={e => setSpecializationQuery(e.target.value)} style={{ flex: 1, padding: "0.5rem", borderRadius: "4px", border: "1px solid #ccc" }}/>
+            <input type="text" placeholder="Miasto, np. Warszawa" value={cityQuery} onChange={e => setCityQuery(e.target.value)} style={{ flex: 1, padding: "0.5rem", borderRadius: "4px", border: "1px solid #ccc" }}/>
+            <input type="text" placeholder="Nazwisko, np. Kowalski" value={lastNameQuery} onChange={e => setLastNameQuery(e.target.value)} style={{ flex: 1, padding: "0.5rem", borderRadius: "4px", border: "1px solid #ccc" }}/>
+            <select value={`${sortBy}-${sortOrder}`} onChange={(e) => { const [newSortBy, newSortOrder] = e.target.value.split("-"); setSortBy(newSortBy); setSortOrder(newSortOrder); }} style={{ padding: "0.5rem", borderRadius: "4px", border: "1px solid #ccc" }}> <option value="nazwisko-ASC">Nazwisko A-Z</option> <option value="nazwisko-DESC">Nazwisko Z-A</option> <option value="specjalizacja-ASC">Specjalizacja A-Z</option> <option value="specjalizacja-DESC">Specjalizacja Z-A</option> </select>
             <button onClick={searchDoctors} style={{ padding: "0.5rem 1rem", cursor: "pointer" }}>Szukaj</button>
           </div>
           <div style={{ display: "grid", gap: "1rem" }}>
