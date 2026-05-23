@@ -221,6 +221,7 @@ export default function PatientDashboard() {
             <button onClick={searchDoctors} style={{ padding: "0.5rem 1rem", cursor: "pointer" }}>Szukaj</button>
           </div>
           <div style={{ display: "grid", gap: "1rem" }}>
+            {doctors.length === 0 && !loading && ( <p>Brak lekarzy spełniających podane kryteria.</p> )}
             {doctors.map(doc => (
               <div key={doc.id} style={{ padding: "1rem", border: "1px solid #ddd", borderRadius: "8px", cursor: "pointer" }} onClick={() => { setSelectedDoctor(doc); fetchTerminy(doc.id); setActiveTab("booking"); }}>
                 <h3 style={{ margin: "0 0 0.5rem" }}>{doc.imie} {doc.nazwisko}</h3>
