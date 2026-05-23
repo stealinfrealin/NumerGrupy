@@ -154,9 +154,9 @@ export default function PatientDashboard() {
                     <td style={{ padding: "0.5rem" }}>{appt.data}</td>
                     <td style={{ padding: "0.5rem" }}>{appt.godzina}</td>
                     <td style={{ padding: "0.5rem" }}>{appt.lekarz_imie} {appt.lekarz_nazwisko} ({appt.specjalizacja})</td>
-                    <td style={{ padding: "0.5rem" }}><span style={{ padding: "0.2rem 0.5rem", borderRadius: "12px", background: appt.status === "potwierdzona" ? "#d4edda" : appt.status === "anulowana" ? "#f8d7da" : "#fff3cd", color: "#333", fontSize: "0.85rem" }}>{appt.status}</span></td>
+                    <td style={{ padding: "0.5rem" }}><span style={{ padding: "0.2rem 0.5rem", borderRadius: "12px", background: appt.status === "Potwierdzona" ? "#d4edda" : appt.status === "Anulowana" ? "#f8d7da" : "#fff3cd", color: "#333", fontSize: "0.85rem" }}>{appt.status}</span></td>
                     <td style={{ padding: "0.5rem" }}>
-                      {appt.status === "zaplanowana" && (<>
+                      {appt.status === "Zarezerwowana" && (<>
                         <button onClick={() => handleCancel(appt.id)} style={{ marginRight: "0.5rem", cursor: "pointer" }}>Anuluj</button>
                         <button onClick={() => setRatingModal({ open: true, appointmentId: appt.id })} style={{ cursor: "pointer" }}>Oceń</button>
                       </>)}
