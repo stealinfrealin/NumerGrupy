@@ -16,6 +16,9 @@ services:
     restart: always
     ports:
       - "5173:5173"
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
     networks:
       - med-net
     depends_on:
