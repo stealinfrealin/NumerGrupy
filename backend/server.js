@@ -25,11 +25,12 @@ const app = express();
 app.use(cookieParser());
 app.use(helmet());
 app.use(cors({ origin: process.env.FRONTEND_URL || 'http://localhost:5173', credentials: true }));
-app.use(express.json());
+app.use(express.json())
 
+// Wyższy limit na czas developmentu
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: 100,
+  max: 10000,
   standardHeaders: true,
   legacyHeaders: false,
   message: 'Zbyt wiele żądań z tego IP, spróbuj ponownie za 15 minut'
