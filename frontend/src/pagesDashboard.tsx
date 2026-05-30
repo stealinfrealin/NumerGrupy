@@ -4,7 +4,7 @@ import { useNavigate } from "react-router-dom";
 
 // Typy
 interface Appointment { id: number; data: string; godzina: string; status: string; lekarz_imie: string; lekarz_nazwisko: string; specjalizacja: string; }
-interface Doctor { id: number; imie: string; nazwisko: string; specjalizacja: string; opis: string; srednia_ocen: number; }
+interface Doctor { id: number; imie: string; nazwisko: string; specjalizacja: string; adres: string; opis: string; srednia_ocen: number; }
 interface Termin { id: number; data: string; godzina: string; dostepny: boolean; }
 
 export default function PatientDashboard() {
@@ -226,6 +226,7 @@ export default function PatientDashboard() {
               <div key={doc.id} style={{ padding: "1rem", border: "1px solid #ddd", borderRadius: "8px", cursor: "pointer" }} onClick={() => { setSelectedDoctor(doc); fetchTerminy(doc.id); setActiveTab("booking"); }}>
                 <h3 style={{ margin: "0 0 0.5rem" }}>{doc.imie} {doc.nazwisko}</h3>
                 <p style={{ margin: "0 0 0.25rem", color: "#007bff" }}>{doc.specjalizacja}</p>
+                <p style={{ margin: "0 0 0.25rem", fontSize: "0.9rem", color: "#555" }}>Adres: {doc.adres}</p>
                 <p style={{ margin: "0 0 0.25rem", fontSize: "0.9rem", color: "#555" }}>{doc.opis}</p>
                 <p style={{ margin: 0, fontSize: "0.85rem" }}>⭐ Średnia ocen: {doc.srednia_ocen?.toFixed(1) || "Brak"}</p>
               </div>
