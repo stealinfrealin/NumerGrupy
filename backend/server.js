@@ -119,7 +119,17 @@ app.post('/api/login', [body('email').isEmail(), body('haslo').notEmpty()], vali
     const match = await bcrypt.compare(haslo, user.haslo);
     if (!match) return res.status(401).json({ error: 'Błędne dane' });
 
-    const token = jwt.sign({ id: user.id, role: 'pacjent', email: user.email }, process.env.JWT_SECRET || 'fallback_secret', { expiresIn: '24h' });
+    const token = jwt.sign(
+      {
+        id: user.id,
+        role: 'patient',
+        email: user.email,
+        imie: user.imie,
+        nazwisko: user.nazwisko
+      },
+      process.env.JWT_SECRET || 'fallback_secret',
+      { expiresIn: '24h' }
+    );
     res.cookie('jwt_token', token, {
         httpOnly: true,
         secure: process.env.NODE_ENV === 'production',
