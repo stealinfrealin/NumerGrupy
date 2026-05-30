@@ -13,10 +13,11 @@ export default function AuthForm({ role = 'patient' }: AuthFormProps) {
     const isLoginPath = location.pathname !== "/register" || role === 'admin';
     const [viewMode, setViewMode] = useState<'login' | 'register' | 'reset'>(isLoginPath ? 'login' : 'register');
 
+    const [firstName, setFirstName] = useState("");
+    const [lastName, setLastName] = useState("");
     const [email, setEmail] = useState("");
     const [password, setPassword] = useState("");
     const [newPassword, setNewPassword] = useState("");
-    const [name, setName] = useState("");
     const [dob, setDob] = useState("");
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
@@ -33,29 +34,21 @@ export default function AuthForm({ role = 'patient' }: AuthFormProps) {
                 errorMessage = "Proszę podać prawidłowy adres email.";
             }
         } else if (fieldName === "dob") {
-            if (!/^\d{2}\.\d{2}\.\d{4}$/.test(trimmedValue)) {
-                errorMessage = "Wprowadź datę w formacie DD.MM.RRRR.";
-            } else {
-                const [dayStr, monthStr, yearStr] = trimmedValue.split('.');
-                const day = parseInt(dayStr, 10);
-                const month = parseInt(monthStr, 10);
-                const year = parseInt(yearStr, 10);
-                const currentYear = new Date().getFullYear();
+            const selectedDate = new Date(trimmedValue);
+            const today = new Date();
 
-                if (year < 1900 || year > currentYear) {
-                    errorMessage = `Rok urodzenia musi mieścić się w przedziale 1900–${currentYear}.`;
-                } else {
-                    const dateObj = new Date(year, month - 1, day);
-                    if (dateObj.getFullYear() !== year || dateObj.getMonth() !== month - 1 || dateObj.getDate() !== day) {
-                        errorMessage = "Podano nieprawidłową datę kalendarzową.";
-                    }
-                }
+            if (Number.isNaN(selectedDate.getTime())) {
+                errorMessage = "Podaj prawidłową datę urodzenia.";
+            } else if (selectedDate > today) {
+                errorMessage = "Data urodzenia nie może być z przyszłości.";
+            } else if (selectedDate.getFullYear() < 1900) {
+                errorMessage = "Rok urodzenia nie może być wcześniejszy niż 1900.";
             }
-        } else if (fieldName === "name") {
-            const nameRegex = /^[a-zA-ZąćęłńóśźżĄĆĘŁŃÓŚŹŻ]+(-[a-zA-ZąćęłńóśźżĄĆĘŁŃÓŚŹŻ]+)*\s[a-zA-ZąćęłńóśźżĄĆĘŁŃÓŚŹŻ]+(-[a-zA-ZąćęłńóśźżĄĆĘŁŃÓŚŹŻ]+)*$/;
+            } else if (fieldName === "firstName" || fieldName === "lastName") {
+            const nameRegex = /^[a-zA-ZąćęłńóśźżĄĆĘŁŃÓŚŹŻ]+(-[a-zA-ZąćęłńóśźżĄĆĘŁŃÓŚŹŻ]+)*$/;
             if (!nameRegex.test(trimmedValue)) {
-                errorMessage = "Proszę podać imię i nazwisko oddzielone pojedynczą spacją (np. 'Jan Kowalski' lub 'Anna Kowalska-Maj').";
-            }
+                errorMessage = "Pole może zawierać tylko litery i ewentualnie myślnik.";
+        }
         } else if (fieldName === "password" || fieldName === "newPassword") {
             // ✅ Frontend validation matches backend requirement
             if (trimmedValue.length < 8) {
@@ -70,19 +63,49 @@ export default function AuthForm({ role = 'patient' }: AuthFormProps) {
     const handleSubmit = async (e: FormEvent) => {
         e.preventDefault();
         setError(null);
+        const isEmailValid = validateField("email", email);
 
-        if (viewMode === 'reset') {
-            const isEmailValid = validateField("email", email);
-            const isNewPasswordValid = validateField("newPassword", newPassword);
-            if (!isEmailValid || !isNewPasswordValid) return;
+        const isPasswordValid =
+            viewMode === "reset"
+                ? validateField("newPassword", newPassword)
+                : validateField("password", password);
 
+        const isFirstNameValid =
+            viewMode === "register" && role !== "admin"
+                ? validateField("firstName", firstName)
+                : true;
+
+        const isLastNameValid =
+            viewMode === "register" && role !== "admin"
+                ? validateField("lastName", lastName)
+                : true;
+
+        const isDobValid =
+            viewMode === "register" && role !== "admin"
+                ? validateField("dob", dob)
+                : true;
+
+        if (
+            !isEmailValid ||
+            !isPasswordValid ||
+            !isFirstNameValid ||
+            !isLastNameValid ||
+            !isDobValid
+        ) {
+            return;
+        }
+
+        if (viewMode === "reset") {
             setLoading(true);
+
             try {
                 await resetPassword(email, newPassword);
-                setViewMode('login');
+
+                setViewMode("login");
                 setNewPassword("");
                 setEmail("");
                 setPassword("");
+
                 setError("Hasło zostało pomyślnie zresetowane. Możesz się teraz zalogować.");
                 setFieldErrors({});
             } catch (err: any) {
@@ -90,15 +113,9 @@ export default function AuthForm({ role = 'patient' }: AuthFormProps) {
             } finally {
                 setLoading(false);
             }
+
             return;
         }
-
-        const isEmailValid = validateField("email", email);
-        const isPasswordValid = validateField("password", password);
-        const isNameValid = viewMode === 'register' && role !== 'admin' ? validateField("name", name) : true;
-        const isDobValid = viewMode === 'register' && role !== 'admin' ? validateField("dob", dob) : true;
-
-        if (!isEmailValid || !isPasswordValid || !isNameValid || !isDobValid) return;
 
         setLoading(true);
         try {
@@ -111,10 +128,16 @@ export default function AuthForm({ role = 'patient' }: AuthFormProps) {
                     navigate("/dashboard", { replace: true });
                 }
             } else {
-                await register(name, email, password, dob);
-                navigate("/dashboard", { replace: true });
+                await register(`${firstName} ${lastName}`, email, password, dob);
+                alert("Pomyślnie zarejestrowano Pacjenta");
+                navigate("/dashboard", { replace: true }); 
             }
-            setName(""); setDob(""); setEmail(""); setPassword(""); setFieldErrors({});
+            setFirstName("");
+            setLastName("");
+            setDob("");
+            setEmail("");
+            setPassword("");
+            setFieldErrors({});
         } catch (err: any) {
             setError(err.message || "Wystąpił błąd.");
         } finally {
@@ -136,16 +159,50 @@ export default function AuthForm({ role = 'patient' }: AuthFormProps) {
                 {viewMode === 'register' && role !== 'admin' && (
                     <>
                         <div className={styles.fieldGroup}>
-                            <input className={styles.input} type="text" placeholder="Imię i nazwisko" value={name} onChange={(e) => setName(e.target.value)} />
+                            <input
+                                className={styles.input}
+                                type="text"
+                                placeholder="Imię"
+                                value={firstName}
+                                onChange={(e) => setFirstName(e.target.value)}
+                            />
+                            {fieldErrors.firstName && <p className={styles.errorText}>{fieldErrors.firstName}</p>}
                         </div>
+
                         <div className={styles.fieldGroup}>
-                            <input className={styles.input} type="text" placeholder="DD.MM.RRRR" value={dob} onChange={(e) => setDob(e.target.value)} />
+                            <input
+                                className={styles.input}
+                                type="text"
+                                placeholder="Nazwisko"
+                                value={lastName}
+                                onChange={(e) => setLastName(e.target.value)}
+                            />
+                            {fieldErrors.lastName && <p className={styles.errorText}>{fieldErrors.lastName}</p>}
+                        </div>
+
+                        <div className={styles.fieldGroup}>
+                            <input
+                                className={styles.input}
+                                type="date"
+                                value={dob}
+                                onChange={(e) => setDob(e.target.value)}
+                            />
+                            {fieldErrors.dob && <p className={styles.errorText}>{fieldErrors.dob}</p>}
                         </div>
                     </>
                 )}
 
                 <div className={styles.fieldGroup}>
-                    <input className={styles.input} type="email" placeholder="Email" value={email} onChange={(e) => setEmail(e.target.value)} />
+                    <input
+                        className={styles.input}
+                        type="email"
+                        placeholder="Email"
+                        value={email}
+                        onChange={(e) => setEmail(e.target.value)}
+                    />
+                    {fieldErrors.email && (
+                        <p className={styles.errorText}>{fieldErrors.email}</p>
+                    )}
                 </div>
 
                 {viewMode === 'reset' ? (
