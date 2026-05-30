@@ -161,7 +161,7 @@ export default function PatientDashboard() {
       <header style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1.5rem" }}>
         <div>
           <h1 style={{ margin: 0 }}>Panel Pacjenta</h1>
-          <p style={{ margin: "0.25rem 0 0", color: "#555" }}>Zalogowano jako: <strong>{user.email}</strong></p>
+          <p style={{ margin: "0.25rem 0 0", color: "#555" }}>Witaj, <strong>{user.imie}</strong></p>
         </div>
         <button onClick={() => { logout(); navigate("/login"); }} style={{ padding: "0.5rem 1rem", cursor: "pointer", background: "#ff4d4d", color: "white", border: "none", borderRadius: "4px" }}>Wyloguj się</button>
       </header>
