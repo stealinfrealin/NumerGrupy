@@ -7,10 +7,14 @@ interface ProtectedRouteProps {
 }
 
 export default function ProtectedRoute({ children, requiredRole }: ProtectedRouteProps) {
-    const { isAuthenticated, user } = useAuth();
+    const { isAuthenticated, user, loading } = useAuth();
     const location = useLocation();
 
     console.log("🛡️ ProtectedRoute check:", { isAuthenticated, userRole: user?.role, requiredRole });
+
+    if (loading) {
+    return <div>Ładowanie...</div>;
+}
 
     if (!isAuthenticated) {
         const redirectPath = requiredRole === 'admin' ? '/admin/login' : '/login';

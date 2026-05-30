@@ -16,12 +16,19 @@ interface AuthContextType {
     register: (name: string, email: string, password: string, dob: string) => Promise<void>;
     resetPassword: (email: string, newPassword: string) => Promise<void>;
     logout: () => Promise<void>;
+    loading: boolean;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
+const normalizeRole = (role: string | undefined): 'patient' | 'admin' => {
+    if (role === 'admin') return 'admin';
+    return 'patient';
+};
+
 export function AuthProvider({ children }: { children: ReactNode }) {
     const [isAuthenticated, setIsAuthenticated] = useState(false);
+    const [loading, setLoading] = useState(true);
     const [user, setUser] = useState<User | null>(null);
 
     useEffect(() => {
@@ -30,10 +37,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             .then(data => {
                 if (data?.user) {
                     setIsAuthenticated(true);
-                    setUser({ ...data.user, role: data.user.role || 'patient' });
+                    setUser({ ...data.user, role: normalizeRole(data.user.role) });
                 }
             })
-            .catch(err => console.warn("⚠️ Verify failed:", err));
+            .catch(err => console.warn("⚠️ Verify failed:", err))
+            .finally(() => setLoading(false));
     }, []);
 
     const login = async (email: string, password: string) => {
@@ -44,7 +52,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         if (!res.ok) throw new Error("Nieprawidłowy email lub hasło");
         const data = await res.json();
         setIsAuthenticated(true);
-        setUser({ ...data.user, role: data.user.role || 'patient' });
+        setUser({ ...data.user, role: normalizeRole(data.user.role) });
     };
 
     const adminLogin = async (email: string, password: string) => {
@@ -108,8 +116,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     };
 
     return (
-        <AuthContext.Provider value={{ isAuthenticated, user, login, adminLogin, register, resetPassword, logout }}>
-            {children}
+        <AuthContext.Provider value={{ isAuthenticated, user, loading, login, adminLogin, register, resetPassword, logout }}>
+            {children} 
         </AuthContext.Provider>
     );
 }
