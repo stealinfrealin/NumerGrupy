@@ -430,9 +430,19 @@ app.delete('/api/admin/availability/:id', [param('id').isInt()], authenticateTok
 
 // 26. Delete Patient Account
 app.delete('/api/patients/:id', [param('id').isInt()], authenticateToken, validateRequest, async (req, res) => {
-  if (req.user.role !== 'admin' && req.user.id !== parseInt(req.params.id)) return res.status(403).json({ error: 'Brak dostępu' });
-  try { await pool.query('DELETE FROM pacjent WHERE id = ?', [req.params.id]); res.json({ message: 'Konto usunięte' }); }
-  catch (error) { res.status(500).json({ error: 'Błąd usuwania konta' }); }
+  if (req.user.role !== 'admin' && req.user.id !== parseInt(req.params.id)) {
+    return res.status(403).json({ error: 'Brak dostępu' });
+  }
+  try {
+    await pool.query('DELETE FROM ocena WHERE pacjent_id = ?',[req.params.id]);
+    await pool.query('DELETE FROM wizyta WHERE pacjent_id = ?',[req.params.id]);
+    await pool.query('DELETE FROM pacjent WHERE id = ?',[req.params.id]);
+    res.clearCookie('jwt_token');
+    res.json({ message: 'Konto usunięte' });
+  } catch (error) {
+    console.error('Błąd usuwania konta:', error);
+    res.status(500).json({ error: 'Błąd usuwania konta' });
+  }
 });
 
 // 27. Logout
