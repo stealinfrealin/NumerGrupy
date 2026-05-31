@@ -32,7 +32,7 @@ export default function PatientDashboard() {
   console.log("Dashboard user:", user);
 
   const navigate = useNavigate();
-  const [activeTab, setActiveTab] = useState<"appointments" | "search" | "booking">("appointments");
+  const [activeTab, setActiveTab] = useState<"appointments" | "search" | "booking" | "profile">("appointments");
 
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [appointmentView, setAppointmentView] = useState<"upcoming" | "history">("upcoming");
@@ -53,6 +53,14 @@ export default function PatientDashboard() {
     doctorId: null
   });
   const [ratingValue, setRatingValue] = useState(5);
+  const [isEditingProfile, setIsEditingProfile] = useState(false);
+
+  const [profileForm, setProfileForm] = useState({
+    imie: user?.imie || "",
+    nazwisko: user?.nazwisko || "",
+    email: user?.email || "",
+    data_urodzenia: ""
+  });
 
   const [specializationQuery, setSpecializationQuery] = useState("");
   const [cityQuery, setCityQuery] = useState("");
@@ -274,6 +282,70 @@ export default function PatientDashboard() {
     }
   };
 
+  const handleUpdateProfile = async () => {
+    if (!user) return;
+
+    if (!profileForm.imie.trim() || !profileForm.nazwisko.trim() || !profileForm.email.trim()) {
+      alert("Uzupełnij imię, nazwisko i email.");
+      return;
+    }
+
+    if (!profileForm.email.includes("@")) {
+      alert("Podaj poprawny adres email.");
+      return;
+    }
+
+    try {
+      const res = await fetch(`/api/patients/${user.id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({
+          imie: profileForm.imie,
+          nazwisko: profileForm.nazwisko,
+          email: profileForm.email,
+          data_urodzenia: profileForm.data_urodzenia || undefined
+        })
+      });
+
+      if (res.ok) {
+        alert("Dane zostały zaktualizowane. Zaloguj się ponownie, żeby zobaczyć zmiany.");
+        setIsEditingProfile(false);
+      } else {
+        alert("Nie udało się zaktualizować danych.");
+      }
+    } catch {
+      alert("Błąd aktualizacji danych.");
+    }
+  };
+
+  const handleDeleteAccount = async () => {
+    if (!user) return;
+
+    const confirmed = window.confirm(
+      "Czy na pewno chcesz usunąć konto? Tej operacji nie można cofnąć."
+    );
+
+    if (!confirmed) return;
+
+    try {
+      const res = await fetch(`/api/patients/${user.id}`, {
+        method: "DELETE",
+        credentials: "include"
+      });
+
+      if (res.ok) {
+        alert("Konto zostało usunięte.");
+        await logout();
+        navigate("/login");
+      } else {
+        alert("Nie udało się usunąć konta.");
+      }
+    } catch {
+      alert("Błąd usuwania konta.");
+    }
+  };
+
   const upcomingAppointments = appointments.filter(
     a => a.status === "Zarezerwowana" || a.status === "Potwierdzona"
   );
@@ -282,12 +354,14 @@ export default function PatientDashboard() {
     a => a.status === "Anulowana" || a.status === "Odbyta"
   );
 
-  const pageTitle = 
+ const pageTitle =
   activeTab === "appointments"
     ? "Moje wizyty"
     : activeTab === "search"
     ? "Znajdź lekarza"
-    : "Zarezerwuj wizytę";
+    : activeTab === "booking"
+    ? "Zarezerwuj wizytę"
+    : "Moje dane";
 
 
 
@@ -331,7 +405,7 @@ export default function PatientDashboard() {
       </div>
 
         <nav style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
-          {(["appointments", "search", "booking"] as const).map(tab => (
+          {(["appointments", "search", "booking", "profile"] as const).map(tab => (
             <button
               key={tab}
               onClick={() => setActiveTab(tab)}
@@ -346,7 +420,13 @@ export default function PatientDashboard() {
                 color: activeTab === tab ? "white" : "#333"
               }}
             >
-              {tab === "appointments" ? "Moje wizyty" : tab === "search" ? "Znajdź lekarza" : "Zarezerwuj wizytę"}
+              {tab === "appointments"
+                ? "Moje wizyty"
+                : tab === "search"
+                ? "Znajdź lekarza"
+                : tab === "booking"
+                ? "Zarezerwuj wizytę"
+                : "Moje dane"}
             </button>
           ))}
         </nav>
@@ -416,6 +496,7 @@ export default function PatientDashboard() {
                 Historia wizyt
               </button>
             </div>
+
             {appointments.length === 0 ? <p>Brak zaplanowanych wizyt.</p> : (
               <table style={{ width: "100%", borderCollapse: "collapse", marginTop: "1rem" }}>
                 <thead><tr style={{ background: "#f8f9fa", textAlign: "left" }}>
@@ -542,6 +623,175 @@ export default function PatientDashboard() {
                 ))}
               </div>
             )}
+          </section>
+        )}
+
+        {activeTab === "profile" && (
+          <section
+            style={{
+              background: "white",
+              padding: "1.5rem",
+              borderRadius: "12px",
+              boxShadow: "0 4px 12px rgba(0,0,0,0.05)"
+            }}
+          >
+            <h2 style={{ marginTop: 0 }}>Dane osobowe</h2>
+
+            {!isEditingProfile ? (
+              <>
+                <p><strong>Imię:</strong> {user?.imie || "-"}</p>
+                <p><strong>Nazwisko:</strong> {user?.nazwisko || "-"}</p>
+                <p><strong>Email:</strong> {user?.email || "-"}</p>
+
+                <button
+                  onClick={() => setIsEditingProfile(true)}
+                  style={{
+                    padding: "0.5rem 1rem",
+                    cursor: "pointer",
+                    background: "#007bff",
+                    color: "white",
+                    border: "none",
+                    borderRadius: "8px",
+                    fontWeight: 500
+                  }}
+                >
+                  Edytuj dane
+                </button>
+              </>
+            ) : (
+              <>
+                <div style={{ display: "grid", gap: "0.75rem", maxWidth: "420px" }}>
+                  <label>
+                    Imię
+                    <input
+                      value={profileForm.imie}
+                      onChange={(e) => setProfileForm({ ...profileForm, imie: e.target.value })}
+                      style={{
+                        width: "100%",
+                        padding: "0.6rem",
+                        marginTop: "0.25rem",
+                        borderRadius: "6px",
+                        border: "1px solid #ccc"
+                      }}
+                    />
+                  </label>
+
+                  <label>
+                    Nazwisko
+                    <input
+                      value={profileForm.nazwisko}
+                      onChange={(e) => setProfileForm({ ...profileForm, nazwisko: e.target.value })}
+                      style={{
+                        width: "100%",
+                        padding: "0.6rem",
+                        marginTop: "0.25rem",
+                        borderRadius: "6px",
+                        border: "1px solid #ccc"
+                      }}
+                    />
+                  </label>
+
+                  <label>
+                    Email
+                    <input
+                      type="email"
+                      value={profileForm.email}
+                      onChange={(e) => setProfileForm({ ...profileForm, email: e.target.value })}
+                      style={{
+                        width: "100%",
+                        padding: "0.6rem",
+                        marginTop: "0.25rem",
+                        borderRadius: "6px",
+                        border: "1px solid #ccc"
+                      }}
+                    />
+                  </label>
+
+                  <label>
+                    Data urodzenia
+                    <input
+                      type="date"
+                      value={profileForm.data_urodzenia}
+                      onChange={(e) => setProfileForm({ ...profileForm, data_urodzenia: e.target.value })}
+                      style={{
+                        width: "100%",
+                        padding: "0.6rem",
+                        marginTop: "0.25rem",
+                        borderRadius: "6px",
+                        border: "1px solid #ccc"
+                      }}
+                    />
+                  </label>
+                </div>
+
+                <div style={{ display: "flex", gap: "0.5rem", marginTop: "1rem" }}>
+                  <button
+                    onClick={handleUpdateProfile}
+                    style={{
+                      padding: "0.5rem 1rem",
+                      cursor: "pointer",
+                      background: "#007bff",
+                      color: "white",
+                      border: "none",
+                      borderRadius: "8px",
+                      fontWeight: 500
+                    }}
+                  >
+                    Zapisz
+                  </button>
+
+                  <button
+                    onClick={() => setIsEditingProfile(false)}
+                    style={{
+                      padding: "0.5rem 1rem",
+                      cursor: "pointer",
+                      background: "white",
+                      color: "#555",
+                      border: "1px solid #ccc",
+                      borderRadius: "8px",
+                      fontWeight: 500
+                    }}
+                  >
+                    Anuluj
+                  </button>
+                </div>
+              </>
+            )}
+
+
+            <div
+              style={{
+                marginTop: "2rem",
+                paddingTop: "1.5rem",
+                borderTop: "1px solid #eee"
+              }}
+            >
+              <h3 style={{ color: "#ff4d4d", marginTop: 0 }}>
+                Usunięcie konta
+              </h3>
+
+              <p style={{ color: "#666", maxWidth: "520px" }}>
+                Usunięcie konta jest trwałe i spowoduje utratę dostępu do profilu pacjenta.
+              </p>
+
+              <button
+                onClick={handleDeleteAccount}
+                style={{
+                  padding: "0.6rem 1rem",
+                  cursor: "pointer",
+                  background: "white",
+                  color: "#ff4d4d",
+                  border: "1px solid #ff4d4d",
+                  borderRadius: "8px",
+                  fontWeight: 500
+                }}
+              >
+                Usuń konto
+              </button>
+            </div>
+
+
+
           </section>
         )}
 
