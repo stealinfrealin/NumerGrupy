@@ -185,16 +185,17 @@ app.get('/api/doctors', [
 ], validateRequest, async (req, res) => {
   const { specjalizacja, miasto, nazwisko, sortBy = 'nazwisko', order = 'ASC' } = req.query;
   try {
-    let queryStr = 'SELECT * FROM lekarz WHERE 1=1';
+    let queryStr = `SELECT  l.*, AVG(o.wartosc) as srednia_ocen FROM lekarz l LEFT JOIN ocena o ON o.lekarz_id = l.id WHERE 1=1`;
     const params = [];
-    if (specjalizacja) { queryStr += ' AND specjalizacja = ?'; params.push(specjalizacja); }
-    if (miasto) { queryStr += ' AND adres LIKE ?'; params.push(`%${miasto}%`); }
-    if (nazwisko) { queryStr += ' AND nazwisko LIKE ?'; params.push(`%${nazwisko}%`); }
+    if (specjalizacja) { queryStr += ' AND l.specjalizacja = ?'; params.push(specjalizacja); }
+    if (miasto) { queryStr += ' AND l.adres LIKE ?'; params.push(`%${miasto}%`); }
+    if (nazwisko) { queryStr += ' AND l.nazwisko LIKE ?'; params.push(`%${nazwisko}%`); }
 
     const allowedSort = ['nazwisko', 'specjalizacja'];
     const safeSort = allowedSort.includes(sortBy) ? sortBy : 'nazwisko';
     const safeOrder = order.toUpperCase() === 'DESC' ? 'DESC' : 'ASC';
-    queryStr += ` ORDER BY ${safeSort} ${safeOrder}`;
+    queryStr += ' GROUP BY l.id';
+    queryStr += ` ORDER BY l.${safeSort} ${safeOrder}`;
 
     const [rows] = await pool.query(queryStr, params);
     res.json(rows);
