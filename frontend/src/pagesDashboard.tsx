@@ -3,7 +3,16 @@ import { useAuth } from "./AuthContext";
 import { useNavigate } from "react-router-dom";
 
 // Typy
-interface Appointment { id: number; data: string; godzina: string; status: string; lekarz_imie: string; lekarz_nazwisko: string; specjalizacja: string; }
+interface Appointment {
+  id: number;
+  data: string;
+  godzina: string;
+  status: string;
+  lekarz_id: number;
+  lekarz_imie: string;
+  lekarz_nazwisko: string;
+  specjalizacja: string;
+}
 interface Doctor { id: number; imie: string; nazwisko: string; specjalizacja: string; adres: string; opis: string; srednia_ocen: number; }
 interface Termin { id: number; data: string; godzina: string; dostepny: boolean; }
 

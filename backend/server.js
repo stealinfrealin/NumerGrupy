@@ -211,6 +211,7 @@ app.get('/api/doctors/:id', [param('id').isInt()], validateRequest, async (req, 
   } catch (error) { res.status(500).json({ error: 'Błąd pobierania profilu' }); }
 });
 
+/*
 // 6. Patient Profile (Appointments)
 app.get('/api/patients/:id/appointments', [param('id').isInt()], authenticateToken, validateRequest, async (req, res) => {
   if (req.user.role !== 'admin' && req.user.id !== parseInt(req.params.id)) return res.status(403).json({ error: 'Brak dostępu' });
@@ -222,6 +223,25 @@ app.get('/api/patients/:id/appointments', [param('id').isInt()], authenticateTok
     );
     res.json(visits);
   } catch (error) { res.status(500).json({ error: 'Błąd pobierania wizyt' }); }
+});
+*/
+
+// 6. Patient Profile (Appointments)
+app.get('/api/patients/:id/appointments', [param('id').isInt()], authenticateToken, validateRequest, async (req, res) => {
+  if (req.user.role !== 'admin' && req.user.id !== parseInt(req.params.id)) {return res.status(403).json({ error: 'Brak dostępu' });}
+  try {
+    const [visits] = await pool.query(
+      `SELECT w.id, w.data, w.godzina, w.status, 
+      l.id as lekarz_id, l.imie as lekarz_imie, l.nazwisko as lekarz_nazwisko, l.specjalizacja,
+      o.id as ocena_id, o.wartosc as ocena_wartosc, o.komentarz as ocena_komentarz
+      FROM wizyta w JOIN termin t ON w.termin_id = t.id JOIN lekarz l ON t.lekarz_id = l.id 
+      LEFT JOIN ocena o ON o.lekarz_id = l.id AND o.pacjent_id = w.pacjent_id
+      WHERE w.pacjent_id = ? ORDER BY w.data ASC, w.godzina ASC`, [req.params.id]
+    );
+    res.json(visits);
+  } catch (error) {
+    res.status(500).json({ error: 'Błąd pobierania wizyt' });
+  }
 });
 
 // 7. Calendar (Available Slots)
@@ -284,6 +304,8 @@ app.post('/api/reviews', [
   const { pacjent_id, lekarz_id, wartosc, komentarz } = req.body;
   if (req.user.role !== 'admin' && req.user.id !== pacjent_id) return res.status(403).json({ error: 'Brak dostępu' });
   try {
+    const [existingReviews] = await pool.query('SELECT id FROM ocena WHERE pacjent_id = ? AND lekarz_id = ?', [pacjent_id, lekarz_id]);
+    if (existingReviews.length > 0) {return res.status(409).json({ error: 'Ocena została już wystawiona' });}
     await pool.query('INSERT INTO ocena (wartosc, komentarz, pacjent_id, lekarz_id) VALUES (?, ?, ?, ?)', [wartosc, komentarz || '', pacjent_id, lekarz_id]);
     res.status(201).json({ message: 'Ocena dodana' });
   } catch (error) { res.status(500).json({ error: 'Błąd dodawania oceny' }); }
