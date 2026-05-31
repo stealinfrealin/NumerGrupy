@@ -211,20 +211,6 @@ app.get('/api/doctors/:id', [param('id').isInt()], validateRequest, async (req, 
   } catch (error) { res.status(500).json({ error: 'Błąd pobierania profilu' }); }
 });
 
-/*
-// 6. Patient Profile (Appointments)
-app.get('/api/patients/:id/appointments', [param('id').isInt()], authenticateToken, validateRequest, async (req, res) => {
-  if (req.user.role !== 'admin' && req.user.id !== parseInt(req.params.id)) return res.status(403).json({ error: 'Brak dostępu' });
-  try {
-    const [visits] = await pool.query(
-		`SELECT w.id, w.data, w.godzina, w.status, l.id as lekarz_id, l.imie as lekarz_imie, l.nazwisko as lekarz_nazwisko, l.specjalizacja
-		FROM wizyta w JOIN termin t ON w.termin_id = t.id JOIN lekarz l ON t.lekarz_id = l.id
-		WHERE w.pacjent_id = ? ORDER BY w.data ASC, w.godzina ASC`, [req.params.id]
-    );
-    res.json(visits);
-  } catch (error) { res.status(500).json({ error: 'Błąd pobierania wizyt' }); }
-});
-*/
 
 // 6. Patient Profile (Appointments)
 app.get('/api/patients/:id/appointments', [param('id').isInt()], authenticateToken, validateRequest, async (req, res) => {
