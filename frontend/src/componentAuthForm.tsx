@@ -43,7 +43,7 @@ export default function AuthForm({ role = 'patient' }: AuthFormProps) {
                 const currentYear = new Date().getFullYear();
 
                 if (year < 1900 || year > currentYear) {
-                    errorMessage = `Rok urodzenia musi mieścić się w przedziale 1900–${currentYear}.`;
+                    errorMessage = `Rok urodzenia musi mieścić się w przedziale 1900-${currentYear}.`;
                 } else {
                     const dateObj = new Date(year, month - 1, day);
                     if (dateObj.getFullYear() !== year || dateObj.getMonth() !== month - 1 || dateObj.getDate() !== day) {
@@ -52,12 +52,11 @@ export default function AuthForm({ role = 'patient' }: AuthFormProps) {
                 }
             }
         } else if (fieldName === "name") {
-            const nameRegex = /^[a-zA-ZąćęłńóśźżĄĆĘŁŃÓŚŹŻ]+(-[a-zA-ZąćęłńóśźżĄĆĘŁŃÓŚŹŻ]+)*\s[a-zA-ZąćęłńóśźżĄĆĘŁŃÓŚŹŻ]+(-[a-zA-ZąćęłńóśźżĄĆĘŁŃÓŚŹŻ]+)*$/;
-            if (!nameRegex.test(trimmedValue)) {
-                errorMessage = "Proszę podać imię i nazwisko oddzielone pojedynczą spacją (np. 'Jan Kowalski' lub 'Anna Kowalska-Maj').";
+            const nameParts = trimmedValue.split(/\s+/);
+            if (nameParts.length < 2) {
+                errorMessage = "Proszę podać imię i nazwisko oddzielone pojedynczą spacją, np. Jan Kowalski albo Anna Kowalska-Maj.";
             }
         } else if (fieldName === "password" || fieldName === "newPassword") {
-            // ✅ Frontend validation matches backend requirement
             if (trimmedValue.length < 8) {
                 errorMessage = "Hasło musi mieć co najmniej 8 znaków.";
             }
@@ -65,6 +64,10 @@ export default function AuthForm({ role = 'patient' }: AuthFormProps) {
 
         setFieldErrors(prev => ({ ...prev, [fieldName]: errorMessage }));
         return errorMessage === "";
+    };
+
+    const clearFieldError = (fieldName: string) => {
+        if (fieldErrors[fieldName]) setFieldErrors(prev => ({ ...prev, [fieldName]: "" }));
     };
 
     const handleSubmit = async (e: FormEvent) => {
@@ -132,30 +135,40 @@ export default function AuthForm({ role = 'patient' }: AuthFormProps) {
                 </div>
             )}
 
-            <form onSubmit={handleSubmit} className={styles.form} noValidate>
+            <form onSubmit={handleSubmit} className={styles.form} noValidate acceptCharset="UTF-8">
+                <p className={styles.requiredInfo}>Pola oznaczone gwiazdką (*) są wymagane.</p>
+
                 {viewMode === 'register' && role !== 'admin' && (
                     <>
                         <div className={styles.fieldGroup}>
-                            <input className={styles.input} type="text" placeholder="Imię i nazwisko" value={name} onChange={(e) => setName(e.target.value)} />
+                            <label className={styles.label}>Imię i nazwisko *</label>
+                            <input className={styles.input} type="text" placeholder="np. Łukasz Kowalski" value={name} onChange={(e) => { setName(e.target.value); clearFieldError("name"); }} onBlur={() => validateField("name", name)} />
+                            {fieldErrors.name && <p className={styles.errorText}>{fieldErrors.name}</p>}
                         </div>
                         <div className={styles.fieldGroup}>
-                            <input className={styles.input} type="text" placeholder="DD.MM.RRRR" value={dob} onChange={(e) => setDob(e.target.value)} />
+                            <label className={styles.label}>Data urodzenia *</label>
+                            <input className={styles.input} type="text" placeholder="DD.MM.RRRR" value={dob} onChange={(e) => { setDob(e.target.value); clearFieldError("dob"); }} onBlur={() => validateField("dob", dob)} />
+                            {fieldErrors.dob && <p className={styles.errorText}>{fieldErrors.dob}</p>}
                         </div>
                     </>
                 )}
 
                 <div className={styles.fieldGroup}>
-                    <input className={styles.input} type="email" placeholder="Email" value={email} onChange={(e) => setEmail(e.target.value)} />
+                    <label className={styles.label}>Email *</label>
+                    <input className={styles.input} type="email" placeholder="Email" value={email} onChange={(e) => { setEmail(e.target.value); clearFieldError("email"); }} onBlur={() => validateField("email", email)} />
+                    {fieldErrors.email && <p className={styles.errorText}>{fieldErrors.email}</p>}
                 </div>
 
                 {viewMode === 'reset' ? (
                     <div className={styles.fieldGroup}>
-                        <input className={styles.input} type="password" placeholder="Nowe hasło (min. 8 znaków)" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} />
+                        <label className={styles.label}>Nowe hasło *</label>
+                        <input className={styles.input} type="password" placeholder="Nowe hasło (min. 8 znaków)" value={newPassword} onChange={(e) => { setNewPassword(e.target.value); clearFieldError("newPassword"); }} onBlur={() => validateField("newPassword", newPassword)} />
                         {fieldErrors.newPassword && <p className={styles.errorText}>{fieldErrors.newPassword}</p>}
                     </div>
                 ) : (
                     <div className={styles.fieldGroup}>
-                        <input className={styles.input} type="password" placeholder="Hasło" value={password} onChange={(e) => setPassword(e.target.value)} />
+                        <label className={styles.label}>Hasło *</label>
+                        <input className={styles.input} type="password" placeholder="Hasło" value={password} onChange={(e) => { setPassword(e.target.value); clearFieldError("password"); }} onBlur={() => validateField("password", password)} />
                         {fieldErrors.password && <p className={styles.errorText}>{fieldErrors.password}</p>}
                     </div>
                 )}
@@ -169,9 +182,9 @@ export default function AuthForm({ role = 'patient' }: AuthFormProps) {
                 )}
 
                 <button className={styles.submitBtn} type="submit" disabled={loading}>
-                    {loading ? "Przetwarzanie..." : 
-                     viewMode === 'reset' ? "Resetuj hasło" : 
-                     viewMode === 'login' ? (role === 'admin' ? "Zaloguj jako Admin" : "Zaloguj się") : 
+                    {loading ? "Przetwarzanie..." :
+                     viewMode === 'reset' ? "Resetuj hasło" :
+                     viewMode === 'login' ? (role === 'admin' ? "Zaloguj jako Admin" : "Zaloguj się") :
                      "Stwórz konto"}
                 </button>
 

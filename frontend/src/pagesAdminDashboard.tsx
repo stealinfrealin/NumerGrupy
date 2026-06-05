@@ -2,17 +2,21 @@ import { useState, useEffect } from "react";
 import { useAuth } from "./AuthContext";
 import { useNavigate } from "react-router-dom";
 
+const formatDate = (value: string) => value ? value.split("T")[0] : "";
+
 export default function AdminDashboard() {
-    const { user, logout } = useAuth();
+    const { logout } = useAuth();
     const navigate = useNavigate();
 
     const [users, setUsers] = useState<any[]>([]);
     const [doctors, setDoctors] = useState<any[]>([]);
     const [appointments, setAppointments] = useState<any[]>([]);
 
-    const [newDoctor, setNewDoctor] = useState({ 
-        imie: "", nazwisko: "", specjalizacja: "", adres: "", opis: "" 
+    const [newDoctor, setNewDoctor] = useState({
+        imie: "", nazwisko: "", specjalizacja: "", adres: "", opis: ""
     });
+    const [editUser, setEditUser] = useState<any | null>(null);
+    const [editDoctor, setEditDoctor] = useState<any | null>(null);
 
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
@@ -24,7 +28,6 @@ export default function AdminDashboard() {
             ...(options.headers || {}),
         };
 
-        console.log(`[API] Requesting: ${url}`);
         const response = await fetch(url, { ...options, headers, credentials: 'include' });
 
         if (!response.ok) {
@@ -32,9 +35,8 @@ export default function AdminDashboard() {
             try {
                 const data = await response.json();
                 errMsg = data.error || errMsg;
-            } catch { /* Ignoruj jeśli odpowiedź nie jest JSON (np. czysty tekst 401) */ }
+            } catch { /* Ignoruj jeśli odpowiedź nie jest JSON. */ }
 
-            console.error(`[API] Error ${response.status} for ${url}:`, errMsg);
             if (response.status === 401) navigate("/admin/login", { replace: true });
             throw new Error(errMsg);
         }
@@ -43,32 +45,27 @@ export default function AdminDashboard() {
         return response.json();
     };
 
+    const fetchData = async () => {
+        setLoading(true);
+        setError(null);
+        try {
+            const [usersRes, doctorsRes, apptsRes] = await Promise.all([
+                apiFetch("/api/admin/users"),
+                apiFetch("/api/admin/doctors"),
+                apiFetch("/api/admin/appointments")
+            ]);
+
+            setUsers(usersRes?.patients || []);
+            setDoctors(Array.isArray(doctorsRes) ? doctorsRes : []);
+            setAppointments(Array.isArray(apptsRes) ? apptsRes : []);
+        } catch (err: any) {
+            setError(err.message);
+        } finally {
+            setLoading(false);
+        }
+    };
+
     useEffect(() => {
-        const fetchData = async () => {
-            setLoading(true);
-            setError(null);
-            try {
-                // Równoległe pobieranie danych
-                const [usersRes, doctorsRes, apptsRes] = await Promise.all([
-                    apiFetch("/api/admin/users"),
-                    apiFetch("/api/doctors"), // Endpoint publiczny, nie wymaga tokena admina
-                    apiFetch("/api/admin/appointments")
-                ]);
-
-                console.log("[AdminDashboard] Fetched Users:", usersRes);
-                console.log("[AdminDashboard] Fetched Doctors:", doctorsRes);
-                console.log("[AdminDashboard] Fetched Appointments:", apptsRes);
-
-                // Bezpieczne przypisanie do stanu
-                setUsers(usersRes?.patients || []);
-                setDoctors(Array.isArray(doctorsRes) ? doctorsRes : []);
-                setAppointments(Array.isArray(apptsRes) ? apptsRes : []);
-            } catch (err: any) {
-                setError(err.message);
-            } finally {
-                setLoading(false);
-            }
-        };
         fetchData();
     }, []);
 
@@ -103,88 +100,165 @@ export default function AdminDashboard() {
         } catch (e: any) { alert(e.message); }
     };
 
+    const handleSaveUser = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!editUser) return;
+        try {
+            await apiFetch(`/api/admin/users/${editUser.id}`, {
+                method: "PUT",
+                body: JSON.stringify(editUser)
+            });
+            setEditUser(null);
+            fetchData();
+        } catch (err: any) { alert(err.message); }
+    };
+
+    const handleSaveDoctor = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!editDoctor) return;
+        try {
+            await apiFetch(`/api/admin/doctors/${editDoctor.id}`, {
+                method: "PUT",
+                body: JSON.stringify(editDoctor)
+            });
+            setEditDoctor(null);
+            fetchData();
+        } catch (err: any) { alert(err.message); }
+    };
+
     const handleLogout = async () => {
         await logout();
         navigate("/admin/login", { replace: true });
     };
 
-    if (loading) return <div style={{ padding: "2rem", textAlign: "center" }}>Ładowanie danych...</div>;
-    if (error) return <div style={{ padding: "2rem", color: "red", textAlign: "center" }}>Błąd: {error}</div>;
+    if (loading) return <div className="page-shell">Ładowanie danych...</div>;
+    if (error) return <div className="page-shell"><p className="alert error">Błąd: {error}</p></div>;
 
     return (
-        <div style={{ padding: "2rem", maxWidth: "1200px", margin: "0 auto", fontFamily: "sans-serif" }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "2rem" }}>
+        <div className="page-shell">
+            <div className="panel-header">
                 <h1>Panel Administratora</h1>
-                <button onClick={handleLogout} style={{ padding: "0.5rem 1rem", background: "#ff4d4d", color: "white", border: "none", borderRadius: "4px", cursor: "pointer" }}>
-                    Wyloguj się
-                </button>
+                <button onClick={handleLogout} className="btn danger">Wyloguj się</button>
             </div>
 
-            {/* SEKCJA 1: UŻYTKOWNICY */}
-            <section style={{ marginBottom: "2rem", padding: "1.5rem", border: "1px solid #ddd", borderRadius: "8px", background: "#f9f9f9" }}>
-                <h2>👥 Zarządzanie użytkownikami</h2>
+            <section className="panel-card">
+                <h2>Zarządzanie użytkownikami</h2>
                 {users.length === 0 ? <p>Brak użytkowników.</p> : (
-                    <ul style={{ listStyle: "none", padding: 0 }}>
-                        {users.map(u => (
-                            <li key={u.id} style={{ display: "flex", justifyContent: "space-between", padding: "0.5rem 0", borderBottom: "1px solid #eee" }}>
-                                <span><strong>{u.email}</strong> ({u.imie} {u.nazwisko})</span>
-                                <button onClick={() => handleDeleteUser(u.id)} style={{ color: "red", cursor: "pointer", background: "none", border: "none" }}>Usuń</button>
-                            </li>
-                        ))}
-                    </ul>
+                    <div className="table-wrap">
+                        <table>
+                            <thead><tr><th>Imię</th><th>Nazwisko</th><th>Email</th><th>Akcje</th></tr></thead>
+                            <tbody>
+                                {users.map(u => (
+                                    <tr key={u.id}>
+                                        <td>{u.imie}</td>
+                                        <td>{u.nazwisko}</td>
+                                        <td>{u.email}</td>
+                                        <td className="actions">
+                                            <button className="btn small" onClick={() => setEditUser({ ...u, data_urodzenia: formatDate(u.data_urodzenia), haslo: "" })}>Edytuj</button>
+                                            <button className="btn small danger-light" onClick={() => handleDeleteUser(u.id)}>Usuń</button>
+                                        </td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
+                )}
+
+                {editUser && (
+                    <form onSubmit={handleSaveUser} className="edit-box">
+                        <h3>Edycja użytkownika</h3>
+                        <div className="form-grid">
+                            <input placeholder="Imię" value={editUser.imie || ""} onChange={e => setEditUser({...editUser, imie: e.target.value})} />
+                            <input placeholder="Nazwisko" value={editUser.nazwisko || ""} onChange={e => setEditUser({...editUser, nazwisko: e.target.value})} />
+                            <input type="email" placeholder="Email" value={editUser.email || ""} onChange={e => setEditUser({...editUser, email: e.target.value})} />
+                            <input type="date" value={editUser.data_urodzenia || ""} onChange={e => setEditUser({...editUser, data_urodzenia: e.target.value})} />
+                            <input type="password" placeholder="Nowe hasło opcjonalnie" value={editUser.haslo || ""} onChange={e => setEditUser({...editUser, haslo: e.target.value})} />
+                        </div>
+                        <div className="actions">
+                            <button className="btn" type="submit">Zapisz</button>
+                            <button className="btn danger-light" type="button" onClick={() => setEditUser(null)}>Anuluj</button>
+                        </div>
+                    </form>
                 )}
             </section>
 
-            {/* SEKCJA 2: LEKARZE */}
-            <section style={{ marginBottom: "2rem", padding: "1.5rem", border: "1px solid #ddd", borderRadius: "8px", background: "#f9f9f9" }}>
-                <h2>👨‍⚕️ Zarządzanie lekarzami</h2>
-                <form onSubmit={handleAddDoctor} style={{ marginBottom: "1rem", display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: "0.5rem", background: "#fff", padding: "1rem", borderRadius: "4px" }}>
-                    <input placeholder="Imię" value={newDoctor.imie} onChange={e => setNewDoctor({...newDoctor, imie: e.target.value})} required style={{ padding: "0.5rem" }} />
-                    <input placeholder="Nazwisko" value={newDoctor.nazwisko} onChange={e => setNewDoctor({...newDoctor, nazwisko: e.target.value})} required style={{ padding: "0.5rem" }} />
-                    <input placeholder="Specjalizacja" value={newDoctor.specjalizacja} onChange={e => setNewDoctor({...newDoctor, specjalizacja: e.target.value})} required style={{ padding: "0.5rem" }} />
-                    <input placeholder="Adres" value={newDoctor.adres} onChange={e => setNewDoctor({...newDoctor, adres: e.target.value})} required style={{ padding: "0.5rem" }} />
-                    <textarea placeholder="Opis" value={newDoctor.opis} onChange={e => setNewDoctor({...newDoctor, opis: e.target.value})} style={{ gridColumn: "span 2", padding: "0.5rem" }} />
-                    <button type="submit" style={{ gridColumn: "span 2", padding: "0.5rem", cursor: "pointer", background: "#4CAF50", color: "white", border: "none", borderRadius: "4px" }}>Dodaj Lekarza</button>
+            <section className="panel-card">
+                <h2>Zarządzanie lekarzami</h2>
+                <form onSubmit={handleAddDoctor} className="edit-box">
+                    <h3>Dodaj lekarza</h3>
+                    <div className="form-grid">
+                        <input placeholder="Imię" value={newDoctor.imie} onChange={e => setNewDoctor({...newDoctor, imie: e.target.value})} required />
+                        <input placeholder="Nazwisko" value={newDoctor.nazwisko} onChange={e => setNewDoctor({...newDoctor, nazwisko: e.target.value})} required />
+                        <input placeholder="Specjalizacja" value={newDoctor.specjalizacja} onChange={e => setNewDoctor({...newDoctor, specjalizacja: e.target.value})} required />
+                        <input placeholder="Adres" value={newDoctor.adres} onChange={e => setNewDoctor({...newDoctor, adres: e.target.value})} required />
+                        <textarea placeholder="Opis" value={newDoctor.opis} onChange={e => setNewDoctor({...newDoctor, opis: e.target.value})} />
+                    </div>
+                    <button type="submit" className="btn success">Dodaj lekarza</button>
                 </form>
 
                 {doctors.length === 0 ? <p>Brak lekarzy.</p> : (
-                    <ul style={{ listStyle: "none", padding: 0 }}>
-                        {doctors.map(d => (
-                            <li key={d.id} style={{ display: "flex", justifyContent: "space-between", padding: "0.5rem 0", borderBottom: "1px solid #eee" }}>
-                                <span>Dr {d.imie} {d.nazwisko} - {d.specjalizacja}</span>
-                                <button onClick={() => handleDeleteDoctor(d.id)} style={{ color: "red", cursor: "pointer", background: "none", border: "none" }}>Usuń</button>
-                            </li>
-                        ))}
-                    </ul>
+                    <div className="table-wrap">
+                        <table>
+                            <thead><tr><th>Lekarz</th><th>Specjalizacja</th><th>Adres</th><th>Akcje</th></tr></thead>
+                            <tbody>
+                                {doctors.map(d => (
+                                    <tr key={d.id}>
+                                        <td>{d.imie} {d.nazwisko}</td>
+                                        <td>{d.specjalizacja}</td>
+                                        <td>{d.adres}</td>
+                                        <td className="actions">
+                                            <button className="btn small" onClick={() => setEditDoctor(d)}>Edytuj</button>
+                                            <button className="btn small danger-light" onClick={() => handleDeleteDoctor(d.id)}>Usuń</button>
+                                        </td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
+                )}
+
+                {editDoctor && (
+                    <form onSubmit={handleSaveDoctor} className="edit-box">
+                        <h3>Edycja lekarza</h3>
+                        <div className="form-grid">
+                            <input placeholder="Imię" value={editDoctor.imie || ""} onChange={e => setEditDoctor({...editDoctor, imie: e.target.value})} />
+                            <input placeholder="Nazwisko" value={editDoctor.nazwisko || ""} onChange={e => setEditDoctor({...editDoctor, nazwisko: e.target.value})} />
+                            <input placeholder="Specjalizacja" value={editDoctor.specjalizacja || ""} onChange={e => setEditDoctor({...editDoctor, specjalizacja: e.target.value})} />
+                            <input placeholder="Adres" value={editDoctor.adres || ""} onChange={e => setEditDoctor({...editDoctor, adres: e.target.value})} />
+                            <textarea placeholder="Opis" value={editDoctor.opis || ""} onChange={e => setEditDoctor({...editDoctor, opis: e.target.value})} />
+                        </div>
+                        <div className="actions">
+                            <button className="btn" type="submit">Zapisz</button>
+                            <button className="btn danger-light" type="button" onClick={() => setEditDoctor(null)}>Anuluj</button>
+                        </div>
+                    </form>
                 )}
             </section>
 
-            {/* SEKCJA 3: WIZYTY */}
-            <section style={{ marginBottom: "2rem", padding: "1.5rem", border: "1px solid #ddd", borderRadius: "8px", background: "#f9f9f9" }}>
-                <h2>📅 Przegląd wizyt</h2>
+            <section className="panel-card">
+                <h2>Przegląd wizyt</h2>
                 {appointments.length === 0 ? <p>Brak wizyt.</p> : (
-                    <table style={{ width: "100%", borderCollapse: "collapse", background: "#fff" }}>
-                        <thead>
-                            <tr style={{ textAlign: "left", borderBottom: "2px solid #ddd" }}>
-                                <th style={{ padding: "0.5rem" }}>Data</th>
-                                <th style={{ padding: "0.5rem" }}>Godzina</th>
-                                <th style={{ padding: "0.5rem" }}>Pacjent</th>
-                                <th style={{ padding: "0.5rem" }}>Lekarz</th>
-                                <th style={{ padding: "0.5rem" }}>Status</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {appointments.map(a => (
-                                <tr key={a.id} style={{ borderBottom: "1px solid #eee" }}>
-                                    <td style={{ padding: "0.5rem" }}>{new Date(a.data).toLocaleDateString()}</td>
-                                    <td style={{ padding: "0.5rem" }}>{a.godzina}</td>
-                                    <td style={{ padding: "0.5rem" }}>{a.pacjent_imie} {a.pacjent_nazwisko}</td>
-                                    <td style={{ padding: "0.5rem" }}>{a.lekarz_imie} {a.lekarz_nazwisko}</td>
-                                    <td style={{ padding: "0.5rem" }}>{a.status}</td>
+                    <div className="table-wrap">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>Data</th><th>Godzina</th><th>Pacjent</th><th>Lekarz</th><th>Usługa</th><th>Status</th>
                                 </tr>
-                            ))}
-                        </tbody>
-                    </table>
+                            </thead>
+                            <tbody>
+                                {appointments.map(a => (
+                                    <tr key={a.id}>
+                                        <td>{formatDate(a.data)}</td>
+                                        <td>{String(a.godzina).substring(0, 5)}</td>
+                                        <td>{a.pacjent_imie} {a.pacjent_nazwisko}</td>
+                                        <td>{a.lekarz_imie} {a.lekarz_nazwisko}</td>
+                                        <td>{a.usluga_nazwa || "Brak"}</td>
+                                        <td>{a.status}</td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
                 )}
             </section>
         </div>
