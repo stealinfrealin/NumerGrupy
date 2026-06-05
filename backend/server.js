@@ -64,9 +64,32 @@ const authorizeRole = (...roles) => (req, res, next) => {
 
 // Email service template
 const sendEmail = async (to, subject, text) => {
-  console.log(`[EMAIL] To: ${to} | Subject: ${subject}`);
+  console.log(`[EMAIL] To: ${to} | Subject: ${subject} | Text: ${text}`);
   return true;
 };
+
+const fixPolishText = (value) => {
+  if (typeof value !== 'string') return value;
+  return value
+    .replace(/Ä…/g, 'ą').replace(/Ä‡/g, 'ć').replace(/Ä™/g, 'ę')
+    .replace(/Äł/g, 'ł').replace(/Ĺ‚/g, 'ł').replace(/Ĺ„/g, 'ń')
+    .replace(/Ăł/g, 'ó').replace(/Ĺ›/g, 'ś').replace(/Ĺş/g, 'ź')
+    .replace(/ĹĽ/g, 'ż').replace(/Ä„/g, 'Ą').replace(/Ä†/g, 'Ć')
+    .replace(/Ä/g, 'Ę').replace(/Ĺ/g, 'Ł').replace(/Ĺ/g, 'Ń')
+    .replace(/Ă“/g, 'Ó').replace(/Ĺš/g, 'Ś').replace(/Ĺą/g, 'Ź')
+    .replace(/Ĺ»/g, 'Ż');
+};
+
+const fixPolishRow = (row) => {
+  const fixed = { ...row };
+  Object.keys(fixed).forEach(key => { fixed[key] = fixPolishText(fixed[key]); });
+  return fixed;
+};
+
+const normalizeSearchText = (value) => fixPolishText(value || '')
+  .toLowerCase()
+  .normalize('NFD')
+  .replace(/[\u0300-\u036f]/g, '');
 
 // --- Endpoints ---
 
@@ -89,9 +112,9 @@ app.post('/api/register', [
   try {
     await connection.beginTransaction();
 
-    // Check if email already exists
     const [existingUsers] = await connection.query('SELECT id FROM pacjent WHERE email = ?', [email]);
     if (existingUsers.length > 0) {
+        await connection.rollback();
         return res.status(409).json({ error: 'Email jest już zajęty' });
     }
 
@@ -103,6 +126,7 @@ app.post('/api/register', [
     await connection.commit();
     res.status(201).json({ message: 'Zarejestrowano pomyślnie', id: result.insertId });
   } catch (error) {
+    console.error('Błąd rejestracji:', error);
     await connection.rollback();
     res.status(500).json({ error: 'Rejestracja nieudana' });
   } finally { connection.release(); }
@@ -119,14 +143,14 @@ app.post('/api/login', [body('email').isEmail(), body('haslo').notEmpty()], vali
     const match = await bcrypt.compare(haslo, user.haslo);
     if (!match) return res.status(401).json({ error: 'Błędne dane' });
 
-    const token = jwt.sign({ id: user.id, role: 'pacjent', email: user.email }, process.env.JWT_SECRET || 'fallback_secret', { expiresIn: '24h' });
+    const token = jwt.sign({ id: user.id, role: 'patient', email: user.email, imie: user.imie, nazwisko: user.nazwisko }, process.env.JWT_SECRET || 'fallback_secret', { expiresIn: '24h' });
     res.cookie('jwt_token', token, {
         httpOnly: true,
         secure: process.env.NODE_ENV === 'production',
         sameSite: 'lax',
         maxAge: 24 * 60 * 60 * 1000
     });
-    res.json({ message: 'Zalogowano', user: { id: user.id, imie: user.imie, nazwisko: user.nazwisko, email: user.email } });
+    res.json({ message: 'Zalogowano', user: { id: user.id, imie: user.imie, nazwisko: user.nazwisko, email: user.email, role: 'patient' } });
   } catch (error) { res.status(500).json({ error: 'Błąd logowania' }); }
 });
 
@@ -154,7 +178,7 @@ app.post('/api/admin/login', [body('email').isEmail(), body('haslo').notEmpty()]
 
 // 3. Password Reset
 app.post('/api/reset-password', [
-    body('email').isEmail(), 
+    body('email').isEmail(),
     body('newPassword').isLength({ min: 8 })
 ], validateRequest, async (req, res) => {
     const { email, newPassword } = req.body;
@@ -168,25 +192,46 @@ app.post('/api/reset-password', [
 
 // 4. Search Doctors
 app.get('/api/doctors', [
-  query('specjalizacja').optional().trim(), query('miasto').optional().trim(),
-  query('nazwisko').optional().trim(), query('sortBy').optional().isIn(['nazwisko', 'specjalizacja']),
+  query('search').optional().trim(),
+  query('specjalizacja').optional().trim(),
+  query('miasto').optional().trim(),
+  query('nazwisko').optional().trim(),
+  query('sortBy').optional().isIn(['nazwisko', 'specjalizacja', 'ocena']),
   query('order').optional().isIn(['ASC', 'DESC'])
 ], validateRequest, async (req, res) => {
-  const { specjalizacja, miasto, nazwisko, sortBy = 'nazwisko', order = 'ASC' } = req.query;
+  const { search, specjalizacja, miasto, nazwisko, sortBy = 'nazwisko', order = 'ASC' } = req.query;
   try {
-    let queryStr = 'SELECT * FROM lekarz WHERE 1=1';
+    let queryStr = `
+      SELECT l.*, COALESCE(AVG(o.wartosc), 0) as srednia_ocen
+      FROM lekarz l
+      LEFT JOIN ocena o ON o.lekarz_id = l.id
+      WHERE 1=1`;
     const params = [];
-    if (specjalizacja) { queryStr += ' AND specjalizacja = ?'; params.push(specjalizacja); }
-    if (miasto) { queryStr += ' AND adres LIKE ?'; params.push(`%${miasto}%`); }
-    if (nazwisko) { queryStr += ' AND nazwisko LIKE ?'; params.push(`%${nazwisko}%`); }
 
-    const allowedSort = ['nazwisko', 'specjalizacja'];
-    const safeSort = allowedSort.includes(sortBy) ? sortBy : 'nazwisko';
-    const safeOrder = order.toUpperCase() === 'DESC' ? 'DESC' : 'ASC';
+    // Parametr search filtrujemy po pobraniu danych, bo część istniejących baz
+    // może mieć już zapisane krzaczki w danych lekarzy.
+    if (specjalizacja) { queryStr += ' AND l.specjalizacja LIKE ?'; params.push(`%${specjalizacja}%`); }
+    if (miasto) { queryStr += ' AND l.adres LIKE ?'; params.push(`%${miasto}%`); }
+    if (nazwisko) { queryStr += ' AND l.nazwisko LIKE ?'; params.push(`%${nazwisko}%`); }
+
+    queryStr += ' GROUP BY l.id';
+    const allowedSort = { nazwisko: 'l.nazwisko', specjalizacja: 'l.specjalizacja', ocena: 'srednia_ocen' };
+    const safeSort = allowedSort[sortBy] || 'l.nazwisko';
+    const safeOrder = String(order).toUpperCase() === 'DESC' ? 'DESC' : 'ASC';
     queryStr += ` ORDER BY ${safeSort} ${safeOrder}`;
 
     const [rows] = await pool.query(queryStr, params);
-    res.json(rows);
+    let fixedRows = rows.map(fixPolishRow);
+
+    if (search) {
+      const normalizedSearch = normalizeSearchText(search);
+      fixedRows = fixedRows.filter(row => {
+        const searchable = normalizeSearchText(`${row.imie} ${row.nazwisko} ${row.specjalizacja} ${row.adres}`);
+        return searchable.includes(normalizedSearch);
+      });
+    }
+
+    res.json(fixedRows);
   } catch (error) { res.status(500).json({ error: 'Wyszukiwanie nieudane' }); }
 });
 
@@ -195,9 +240,30 @@ app.get('/api/doctors/:id', [param('id').isInt()], validateRequest, async (req, 
   try {
     const [doctor] = await pool.query('SELECT * FROM lekarz WHERE id = ?', [req.params.id]);
     if (doctor.length === 0) return res.status(404).json({ error: 'Lekarz nie znaleziony' });
-    const [ratings] = await pool.query('SELECT AVG(wartosc) as average_rating FROM ocena WHERE lekarz_id = ?', [req.params.id]);
-    res.json({ ...doctor[0], average_rating: parseFloat(ratings[0].average_rating || 0) });
+
+    const [ratings] = await pool.query('SELECT AVG(wartosc) as srednia_ocen FROM ocena WHERE lekarz_id = ?', [req.params.id]);
+    const [reviews] = await pool.query(
+      `SELECT o.id, o.wartosc, o.komentarz, p.imie as pacjent_imie
+       FROM ocena o JOIN pacjent p ON o.pacjent_id = p.id
+       WHERE o.lekarz_id = ? ORDER BY o.id DESC`, [req.params.id]
+    );
+    const [services] = await pool.query(
+      `SELECT u.id, u.nazwa, u.opis, u.cena
+       FROM usluga u JOIN lekarz_usluga lu ON u.id = lu.usluga_id
+       WHERE lu.lekarz_id = ? ORDER BY u.nazwa ASC`, [req.params.id]
+    );
+
+    res.json({ ...fixPolishRow(doctor[0]), srednia_ocen: parseFloat(ratings[0].srednia_ocen || 0), services: services.map(fixPolishRow), reviews: reviews.map(fixPolishRow) });
   } catch (error) { res.status(500).json({ error: 'Błąd pobierania profilu' }); }
+});
+
+app.get('/api/patients/:id', [param('id').isInt()], authenticateToken, validateRequest, async (req, res) => {
+  if (req.user.role !== 'admin' && req.user.id !== parseInt(req.params.id)) return res.status(403).json({ error: 'Brak dostępu' });
+  try {
+    const [rows] = await pool.query('SELECT id, imie, nazwisko, data_urodzenia, email FROM pacjent WHERE id = ?', [req.params.id]);
+    if (rows.length === 0) return res.status(404).json({ error: 'Pacjent nie znaleziony' });
+    res.json(rows[0]);
+  } catch (error) { res.status(500).json({ error: 'Błąd pobierania profilu pacjenta' }); }
 });
 
 // 6. Patient Profile (Appointments)
@@ -205,25 +271,43 @@ app.get('/api/patients/:id/appointments', [param('id').isInt()], authenticateTok
   if (req.user.role !== 'admin' && req.user.id !== parseInt(req.params.id)) return res.status(403).json({ error: 'Brak dostępu' });
   try {
     const [visits] = await pool.query(
-		`SELECT w.id, w.data, w.godzina, w.status, l.id as lekarz_id, l.imie as lekarz_imie, l.nazwisko as lekarz_nazwisko, l.specjalizacja
-		FROM wizyta w JOIN termin t ON w.termin_id = t.id JOIN lekarz l ON t.lekarz_id = l.id
-		WHERE w.pacjent_id = ? ORDER BY w.data ASC, w.godzina ASC`, [req.params.id]
+      `SELECT w.id, w.data, w.godzina, w.status, w.usluga_id, l.id as lekarz_id, l.imie as lekarz_imie,
+       l.nazwisko as lekarz_nazwisko, l.specjalizacja, u.nazwa as usluga_nazwa
+       FROM wizyta w
+       JOIN termin t ON w.termin_id = t.id
+       JOIN lekarz l ON t.lekarz_id = l.id
+       LEFT JOIN usluga u ON w.usluga_id = u.id
+       WHERE w.pacjent_id = ? ORDER BY w.data ASC, w.godzina ASC`, [req.params.id]
     );
-    res.json(visits);
+    res.json(visits.map(fixPolishRow));
   } catch (error) { res.status(500).json({ error: 'Błąd pobierania wizyt' }); }
 });
 
 // 7. Calendar (Available Slots)
-app.get('/api/doctors/:id/availability', [param('id').isInt()], validateRequest, async (req, res) => {
+app.get('/api/doctors/:id/availability', [
+  param('id').isInt(),
+  query('usluga_id').optional().isInt()
+], validateRequest, async (req, res) => {
   try {
-    const [slots] = await pool.query('SELECT * FROM termin WHERE lekarz_id = ? AND dostepny = TRUE ORDER BY data ASC, godzina ASC', [req.params.id]);
-    res.json(slots);
+    let queryStr = `
+      SELECT t.*, u.nazwa as usluga_nazwa
+      FROM termin t LEFT JOIN usluga u ON t.usluga_id = u.id
+      WHERE t.lekarz_id = ?`;
+    const params = [req.params.id];
+    if (req.query.usluga_id) { queryStr += ' AND t.usluga_id = ?'; params.push(req.query.usluga_id); }
+    queryStr += ' ORDER BY t.data ASC, t.godzina ASC';
+    const [slots] = await pool.query(queryStr, params);
+    res.json(slots.map(fixPolishRow));
   } catch (error) { res.status(500).json({ error: 'Błąd pobierania terminów' }); }
 });
 
 // 8. Book Appointment (Transaction + Row Lock)
-app.post('/api/appointments', [body('pacjent_id').isInt(), body('termin_id').isInt()], authenticateToken, validateRequest, async (req, res) => {
-  const { pacjent_id, termin_id } = req.body;
+app.post('/api/appointments', [
+  body('pacjent_id').isInt(),
+  body('termin_id').isInt(),
+  body('usluga_id').optional().isInt()
+], authenticateToken, validateRequest, async (req, res) => {
+  const { pacjent_id, termin_id, usluga_id } = req.body;
   if (req.user.role !== 'admin' && req.user.id !== pacjent_id) return res.status(403).json({ error: 'Brak dostępu' });
 
   const connection = await pool.getConnection();
@@ -233,7 +317,8 @@ app.post('/api/appointments', [body('pacjent_id').isInt(), body('termin_id').isI
     if (slots.length === 0) { await connection.rollback(); return res.status(400).json({ error: 'Termin zajęty' }); }
 
     const slot = slots[0];
-    await connection.query('INSERT INTO wizyta (data, godzina, status, pacjent_id, termin_id) VALUES (?, ?, \'Zarezerwowana\', ?, ?)', [slot.data, slot.godzina, pacjent_id, termin_id]);
+    const serviceId = usluga_id || slot.usluga_id || null;
+    await connection.query('INSERT INTO wizyta (data, godzina, status, pacjent_id, termin_id, usluga_id) VALUES (?, ?, \'Zarezerwowana\', ?, ?, ?)', [slot.data, slot.godzina, pacjent_id, termin_id, serviceId]);
     await connection.query('UPDATE termin SET dostepny = FALSE WHERE id = ?', [termin_id]);
     await connection.commit();
 
@@ -282,34 +367,35 @@ app.post('/api/reviews', [
 app.get('/api/admin/doctors', authenticateToken, authorizeRole('admin'), async (req, res) => {
   try {
     const [rows] = await pool.query('SELECT id, imie, nazwisko, specjalizacja, adres, opis FROM lekarz ORDER BY nazwisko ASC');
-    res.json(rows);
-  } catch (error) { 
-    res.status(500).json({ error: 'Błąd pobierania listy lekarzy' }); 
+    res.json(rows.map(fixPolishRow));
+  } catch (error) {
+    res.status(500).json({ error: 'Błąd pobierania listy lekarzy' });
   }
 });
 
 app.get('/api/admin/users', authenticateToken, authorizeRole('admin'), async (req, res) => {
   try {
-    const [patients] = await pool.query('SELECT id, imie, nazwisko, email FROM pacjent');
+    const [patients] = await pool.query('SELECT id, imie, nazwisko, data_urodzenia, email FROM pacjent');
     const [doctors] = await pool.query('SELECT id, imie, nazwisko, specjalizacja FROM lekarz');
 
-    res.json({ patients, doctors });
-  } catch (error) { 
-    console.error("Błąd SQL przy pobieraniu użytkowników:", error);
-    res.status(500).json({ error: 'Błąd pobierania użytkowników' }); 
+    res.json({ patients: patients.map(fixPolishRow), doctors: doctors.map(fixPolishRow) });
+  } catch (error) {
+    console.error('Błąd SQL przy pobieraniu użytkowników:', error);
+    res.status(500).json({ error: 'Błąd pobierania użytkowników' });
   }
 });
 
 app.post('/api/admin/doctors', [body('imie').trim().notEmpty(), body('nazwisko').trim().notEmpty(), body('specjalizacja').trim().notEmpty(), body('adres').trim().notEmpty(), body('opis').optional().trim()], authenticateToken, authorizeRole('admin'), validateRequest, async (req, res) => {
   try {
     const [result] = await pool.query('INSERT INTO lekarz (imie, nazwisko, specjalizacja, adres, opis) VALUES (?, ?, ?, ?, ?)', [req.body.imie, req.body.nazwisko, req.body.specjalizacja, req.body.adres, req.body.opis]);
+    await pool.query('INSERT INTO lekarz_usluga (lekarz_id, usluga_id) SELECT ?, id FROM usluga', [result.insertId]);
     res.status(201).json({ message: 'Lekarz dodany', id: result.insertId });
   } catch (error) { res.status(500).json({ error: 'Błąd dodawania lekarza' }); }
 });
 
-app.post('/api/admin/availability', [body('lekarz_id').isInt(), body('data').isDate(), body('godzina').matches(/^([01]\d|2[0-3]):([0-5]\d)$/)], authenticateToken, authorizeRole('admin'), validateRequest, async (req, res) => {
+app.post('/api/admin/availability', [body('lekarz_id').isInt(), body('data').isDate(), body('godzina').matches(/^([01]\d|2[0-3]):([0-5]\d)$/), body('usluga_id').optional().isInt()], authenticateToken, authorizeRole('admin'), validateRequest, async (req, res) => {
   try {
-    await pool.query('INSERT INTO termin (data, godzina, dostepny, lekarz_id) VALUES (?, ?, TRUE, ?)', [req.body.data, req.body.godzina, req.body.lekarz_id]);
+    await pool.query('INSERT INTO termin (data, godzina, dostepny, lekarz_id, usluga_id) VALUES (?, ?, TRUE, ?, ?)', [req.body.data, req.body.godzina, req.body.lekarz_id, req.body.usluga_id || null]);
     res.status(201).json({ message: 'Termin dodany' });
   } catch (error) { res.status(500).json({ error: 'Błąd dodawania terminu' }); }
 });
@@ -335,7 +421,7 @@ app.put('/api/appointments/:id/reschedule', [param('id').isInt(), body('nowy_ter
     if (newSlots.length === 0) { await connection.rollback(); return res.status(400).json({ error: 'Nowy termin zajęty' }); }
     const newSlot = newSlots[0];
 
-    await connection.query('UPDATE wizyta SET data = ?, godzina = ?, termin_id = ? WHERE id = ?', [newSlot.data, newSlot.godzina, req.body.nowy_termin_id, req.params.id]);
+    await connection.query('UPDATE wizyta SET data = ?, godzina = ?, termin_id = ?, usluga_id = COALESCE(?, usluga_id), status = \'Zarezerwowana\' WHERE id = ?', [newSlot.data, newSlot.godzina, req.body.nowy_termin_id, newSlot.usluga_id, req.params.id]);
     await connection.query('UPDATE termin SET dostepny = FALSE WHERE id = ?', [req.body.nowy_termin_id]);
     await connection.query('UPDATE termin SET dostepny = TRUE WHERE id = ?', [visit.termin_id]);
     await connection.commit();
@@ -367,14 +453,32 @@ app.delete('/api/reviews/:id', [param('id').isInt()], authenticateToken, validat
 
 app.get('/api/admin/appointments', authenticateToken, authorizeRole('admin'), async (req, res) => {
   try {
-    const [visits] = await pool.query(`SELECT w.id, w.data, w.godzina, w.status, p.imie as pacjent_imie, p.nazwisko as pacjent_nazwisko, l.imie as lekarz_imie, l.nazwisko as lekarz_nazwisko FROM wizyta w JOIN pacjent p ON w.pacjent_id = p.id JOIN termin t ON w.termin_id = t.id JOIN lekarz l ON t.lekarz_id = l.id ORDER BY w.data ASC, w.godzina ASC`);
-    res.json(visits);
+    const [visits] = await pool.query(
+      `SELECT w.id, w.data, w.godzina, w.status, p.imie as pacjent_imie, p.nazwisko as pacjent_nazwisko,
+       l.imie as lekarz_imie, l.nazwisko as lekarz_nazwisko, u.nazwa as usluga_nazwa
+       FROM wizyta w
+       JOIN pacjent p ON w.pacjent_id = p.id
+       JOIN termin t ON w.termin_id = t.id
+       JOIN lekarz l ON t.lekarz_id = l.id
+       LEFT JOIN usluga u ON w.usluga_id = u.id
+       ORDER BY w.data ASC, w.godzina ASC`
+    );
+    res.json(visits.map(fixPolishRow));
   } catch (error) { res.status(500).json({ error: 'Błąd pobierania wizyt' }); }
 });
 
 app.delete('/api/admin/users/:id', [param('id').isInt()], authenticateToken, authorizeRole('admin'), validateRequest, async (req, res) => {
-  try { await pool.query('DELETE FROM pacjent WHERE id = ?', [req.params.id]); res.json({ message: 'Użytkownik usunięty' }); }
-  catch (error) { res.status(500).json({ error: 'Błąd usuwania użytkownika' }); }
+  const connection = await pool.getConnection();
+  try {
+    await connection.beginTransaction();
+    await connection.query('UPDATE termin SET dostepny = TRUE WHERE id IN (SELECT termin_id FROM wizyta WHERE pacjent_id = ?)', [req.params.id]);
+    await connection.query('DELETE FROM ocena WHERE pacjent_id = ?', [req.params.id]);
+    await connection.query('DELETE FROM wizyta WHERE pacjent_id = ?', [req.params.id]);
+    await connection.query('DELETE FROM pacjent WHERE id = ?', [req.params.id]);
+    await connection.commit();
+    res.json({ message: 'Użytkownik usunięty' });
+  } catch (error) { await connection.rollback(); res.status(500).json({ error: 'Błąd usuwania użytkownika' }); }
+  finally { connection.release(); }
 });
 
 app.put('/api/admin/users/:id', [param('id').isInt(), body('imie').optional().trim(), body('nazwisko').optional().trim(), body('email').optional().isEmail(), body('data_urodzenia').optional().isDate(), body('haslo').optional().isLength({ min: 8 })], authenticateToken, authorizeRole('admin'), validateRequest, async (req, res) => {
@@ -394,12 +498,23 @@ app.put('/api/admin/doctors/:id', [param('id').isInt(), body('imie').optional().
 });
 
 app.delete('/api/admin/doctors/:id', [param('id').isInt()], authenticateToken, authorizeRole('admin'), validateRequest, async (req, res) => {
-  try { await pool.query('DELETE FROM lekarz WHERE id = ?', [req.params.id]); res.json({ message: 'Lekarz usunięty' }); }
-  catch (error) { res.status(500).json({ error: 'Błąd usuwania lekarza' }); }
+  const connection = await pool.getConnection();
+  try {
+    await connection.beginTransaction();
+    await connection.query('DELETE FROM ocena WHERE lekarz_id = ?', [req.params.id]);
+    await connection.query('DELETE FROM wizyta WHERE termin_id IN (SELECT id FROM termin WHERE lekarz_id = ?)', [req.params.id]);
+    await connection.query('DELETE FROM termin WHERE lekarz_id = ?', [req.params.id]);
+    await connection.query('DELETE FROM lekarz_usluga WHERE lekarz_id = ?', [req.params.id]);
+    await connection.query('DELETE FROM lekarz WHERE id = ?', [req.params.id]);
+    await connection.commit();
+    res.json({ message: 'Lekarz usunięty' });
+  }
+  catch (error) { await connection.rollback(); res.status(500).json({ error: 'Błąd usuwania lekarza' }); }
+  finally { connection.release(); }
 });
 
-app.put('/api/admin/availability/:id', [param('id').isInt(), body('data').optional().isDate(), body('godzina').optional().matches(/^([01]\d|2[0-3]):([0-5]\d)$/), body('dostepny').optional().isBoolean()], authenticateToken, authorizeRole('admin'), validateRequest, async (req, res) => {
-  try { await pool.query('UPDATE termin SET data = COALESCE(?, data), godzina = COALESCE(?, godzina), dostepny = COALESCE(?, dostepny) WHERE id = ?', [req.body.data, req.body.godzina, req.body.dostepny, req.params.id]); res.json({ message: 'Termin zaktualizowany' }); }
+app.put('/api/admin/availability/:id', [param('id').isInt(), body('data').optional().isDate(), body('godzina').optional().matches(/^([01]\d|2[0-3]):([0-5]\d)$/), body('dostepny').optional().isBoolean(), body('usluga_id').optional().isInt()], authenticateToken, authorizeRole('admin'), validateRequest, async (req, res) => {
+  try { await pool.query('UPDATE termin SET data = COALESCE(?, data), godzina = COALESCE(?, godzina), dostepny = COALESCE(?, dostepny), usluga_id = COALESCE(?, usluga_id) WHERE id = ?', [req.body.data, req.body.godzina, req.body.dostepny, req.body.usluga_id, req.params.id]); res.json({ message: 'Termin zaktualizowany' }); }
   catch (error) { res.status(500).json({ error: 'Błąd aktualizacji terminu' }); }
 });
 
@@ -411,8 +526,18 @@ app.delete('/api/admin/availability/:id', [param('id').isInt()], authenticateTok
 // 26. Delete Patient Account
 app.delete('/api/patients/:id', [param('id').isInt()], authenticateToken, validateRequest, async (req, res) => {
   if (req.user.role !== 'admin' && req.user.id !== parseInt(req.params.id)) return res.status(403).json({ error: 'Brak dostępu' });
-  try { await pool.query('DELETE FROM pacjent WHERE id = ?', [req.params.id]); res.json({ message: 'Konto usunięte' }); }
-  catch (error) { res.status(500).json({ error: 'Błąd usuwania konta' }); }
+  const connection = await pool.getConnection();
+  try {
+    await connection.beginTransaction();
+    await connection.query('UPDATE termin SET dostepny = TRUE WHERE id IN (SELECT termin_id FROM wizyta WHERE pacjent_id = ?)', [req.params.id]);
+    await connection.query('DELETE FROM ocena WHERE pacjent_id = ?', [req.params.id]);
+    await connection.query('DELETE FROM wizyta WHERE pacjent_id = ?', [req.params.id]);
+    await connection.query('DELETE FROM pacjent WHERE id = ?', [req.params.id]);
+    await connection.commit();
+    res.clearCookie('jwt_token');
+    res.json({ message: 'Konto usunięte' });
+  } catch (error) { await connection.rollback(); res.status(500).json({ error: 'Błąd usuwania konta' }); }
+  finally { connection.release(); }
 });
 
 // 27. Logout

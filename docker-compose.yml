@@ -1,43 +1,42 @@
 services:
   backend:
     build: ./backend
-    container_name: med-backend
+    container_name: med-backend-main
     restart: always
     ports:
-      - "3000:3000"
+      - "3001:3000"
     networks:
-      - med-net
+      - med-net-main
     depends_on:
       - db
 
   frontend:
     build: ./frontend
-    container_name: med-frontend
+    container_name: med-frontend-main
     restart: always
     ports:
-      - "5173:5173"
+      - "5174:5173"
     networks:
-      - med-net
+      - med-net-main
     depends_on:
       - backend
 
   db:
     image: mysql:5.7
-    container_name: med-db
+    container_name: med-db-main
     restart: always
     environment:
       MYSQL_ROOT_PASSWORD: root
       MYSQL_DATABASE: med_system
       TZ: Europe/Warsaw
-    command: --default-time-zone='Europe/Warsaw'
+    command: --default-time-zone='Europe/Warsaw' --character-set-server=utf8mb4 --collation-server=utf8mb4_polish_ci
     ports:
-      - "3306:3306"
+      - "3307:3306"
     networks:
-      - med-net
+      - med-net-main
     volumes:
       - ./db/init.sql:/docker-entrypoint-initdb.d/init.sql
 
 networks:
-  med-net:
+  med-net-main:
     driver: bridge
-

@@ -20,6 +20,11 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
+const normalizeRole = (role?: string): 'patient' | 'admin' => {
+    if (role === 'admin') return 'admin';
+    return 'patient';
+};
+
 export function AuthProvider({ children }: { children: ReactNode }) {
     const [isAuthenticated, setIsAuthenticated] = useState(false);
     const [user, setUser] = useState<User | null>(null);
@@ -30,7 +35,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             .then(data => {
                 if (data?.user) {
                     setIsAuthenticated(true);
-                    setUser({ ...data.user, role: data.user.role || 'patient' });
+                    setUser({ ...data.user, role: normalizeRole(data.user.role) });
                 }
             })
             .catch(err => console.warn("⚠️ Verify failed:", err));
@@ -44,7 +49,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         if (!res.ok) throw new Error("Nieprawidłowy email lub hasło");
         const data = await res.json();
         setIsAuthenticated(true);
-        setUser({ ...data.user, role: data.user.role || 'patient' });
+        setUser({ ...data.user, role: normalizeRole(data.user.role) });
     };
 
     const adminLogin = async (email: string, password: string) => {

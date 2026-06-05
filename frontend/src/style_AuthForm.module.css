@@ -96,6 +96,18 @@
     gap: 0.25rem;
 }
 
+.label {
+    color: #334155;
+    font-size: 0.875rem;
+    font-weight: 600;
+}
+
+.requiredInfo {
+    margin: -0.25rem 0 0;
+    color: #64748b;
+    font-size: 0.85rem;
+}
+
 .errorText {
     color: #ef4444;
     font-size: 0.75rem;

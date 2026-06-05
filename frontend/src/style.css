@@ -1,0 +1,374 @@
+* {
+    box-sizing: border-box;
+}
+
+body {
+    margin: 0;
+    background: #f3f6fb;
+    color: #1f2937;
+    font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+
+button,
+input,
+textarea,
+select {
+    font: inherit;
+}
+
+input,
+textarea,
+select {
+    width: 100%;
+    padding: 0.65rem 0.75rem;
+    border: 1px solid #cbd5e1;
+    border-radius: 6px;
+    background: #ffffff;
+}
+
+textarea {
+    min-height: 90px;
+    resize: vertical;
+}
+
+table {
+    width: 100%;
+    border-collapse: collapse;
+    background: #ffffff;
+}
+
+th,
+td {
+    padding: 0.75rem;
+    border-bottom: 1px solid #e5e7eb;
+    text-align: left;
+    vertical-align: top;
+}
+
+th {
+    background: #f8fafc;
+    color: #475569;
+    font-size: 0.9rem;
+}
+
+.page-shell {
+    width: min(1180px, calc(100% - 2rem));
+    margin: 0 auto;
+    padding: 2rem 0;
+}
+
+.panel-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 1rem;
+    margin-bottom: 1.5rem;
+}
+
+.panel-header h1 {
+    margin: 0;
+}
+
+.panel-header p,
+.section-title p,
+.muted {
+    color: #64748b;
+    margin: 0.25rem 0 0;
+}
+
+.panel-card {
+    margin-bottom: 1.5rem;
+    padding: 1.25rem;
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    background: #ffffff;
+    box-shadow: 0 8px 20px rgba(15, 23, 42, 0.06);
+}
+
+.tabs-bar {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    margin-bottom: 1rem;
+}
+
+.tabs-bar button,
+.btn {
+    padding: 0.6rem 0.9rem;
+    border: none;
+    border-radius: 6px;
+    background: #2563eb;
+    color: #ffffff;
+    cursor: pointer;
+    font-weight: 600;
+}
+
+.tabs-bar button {
+    background: #e2e8f0;
+    color: #334155;
+}
+
+.tabs-bar button.active {
+    background: #2563eb;
+    color: #ffffff;
+}
+
+.btn:disabled {
+    background: #94a3b8;
+    cursor: not-allowed;
+}
+
+.btn.small {
+    padding: 0.4rem 0.6rem;
+    font-size: 0.9rem;
+}
+
+.btn.success {
+    background: #16a34a;
+}
+
+.btn.danger {
+    background: #dc2626;
+}
+
+.btn.danger-light {
+    background: #fee2e2;
+    color: #b91c1c;
+}
+
+.alert {
+    padding: 0.75rem;
+    border-radius: 6px;
+}
+
+.alert.error {
+    background: #fee2e2;
+    color: #991b1b;
+}
+
+.table-wrap {
+    overflow-x: auto;
+}
+
+.actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    align-items: center;
+}
+
+.actions.right {
+    justify-content: flex-end;
+}
+
+.status {
+    display: inline-block;
+    padding: 0.25rem 0.55rem;
+    border-radius: 999px;
+    font-size: 0.85rem;
+}
+
+.status.planned {
+    background: #dcfce7;
+    color: #166534;
+}
+
+.status.cancelled {
+    background: #fee2e2;
+    color: #991b1b;
+}
+
+.search-row {
+    display: flex;
+    gap: 0.75rem;
+    margin: 1rem 0;
+}
+
+.doctor-grid,
+.service-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+    gap: 1rem;
+}
+
+.doctor-card,
+.service-card {
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+    padding: 1rem;
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    background: #ffffff;
+    color: inherit;
+    text-align: left;
+    cursor: pointer;
+}
+
+.doctor-card:hover,
+.service-card.selected {
+    border-color: #2563eb;
+    box-shadow: 0 6px 14px rgba(37, 99, 235, 0.12);
+}
+
+.service-card input {
+    width: auto;
+}
+
+.doctor-profile {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 160px;
+    gap: 1rem;
+    align-items: start;
+}
+
+.score-box {
+    padding: 1rem;
+    border-radius: 8px;
+    background: #eff6ff;
+    text-align: center;
+}
+
+.score-box strong {
+    display: block;
+    font-size: 2rem;
+    color: #1d4ed8;
+}
+
+.calendar {
+    overflow-x: auto;
+    margin: 1rem 0;
+}
+
+.calendar-grid {
+    display: grid;
+    min-width: 720px;
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    overflow: hidden;
+}
+
+.calendar-head,
+.calendar-hour,
+.calendar-empty,
+.calendar-slot {
+    min-height: 46px;
+    padding: 0.65rem;
+    border-right: 1px solid #e2e8f0;
+    border-bottom: 1px solid #e2e8f0;
+}
+
+.calendar-head {
+    background: #f8fafc;
+    font-weight: 700;
+}
+
+.calendar-hour {
+    background: #f8fafc;
+    color: #475569;
+}
+
+.calendar-slot {
+    border-radius: 0;
+    border-left: none;
+    border-top: none;
+    cursor: pointer;
+}
+
+.calendar-slot.free {
+    background: #dcfce7;
+    color: #166534;
+}
+
+.calendar-slot.busy {
+    background: #e5e7eb;
+    color: #6b7280;
+    cursor: not-allowed;
+}
+
+.calendar-slot.selected {
+    outline: 3px solid #2563eb;
+    outline-offset: -3px;
+}
+
+.profile-edit,
+.edit-box {
+    margin-top: 1.25rem;
+    padding: 1rem;
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    background: #f8fafc;
+}
+
+.form-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 0.75rem;
+    margin-bottom: 0.75rem;
+}
+
+.reviews {
+    display: grid;
+    gap: 0.75rem;
+}
+
+.review-item {
+    padding: 0.75rem;
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    background: #f8fafc;
+}
+
+.modal-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 20;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 1rem;
+    background: rgba(15, 23, 42, 0.45);
+}
+
+.modal {
+    width: min(460px, 100%);
+    max-height: calc(100vh - 2rem);
+    overflow: auto;
+    padding: 1.25rem;
+    border-radius: 8px;
+    background: #ffffff;
+}
+
+.modal.wide {
+    width: min(920px, 100%);
+}
+
+.rating-row {
+    display: flex;
+    gap: 0.5rem;
+    margin-bottom: 0.75rem;
+}
+
+.rating-row button {
+    width: 42px;
+    height: 42px;
+    border: 1px solid #cbd5e1;
+    border-radius: 6px;
+    background: #ffffff;
+    cursor: pointer;
+}
+
+.rating-row button.selected {
+    border-color: #2563eb;
+    background: #dbeafe;
+}
+
+@media (max-width: 720px) {
+    .panel-header,
+    .search-row,
+    .doctor-profile {
+        grid-template-columns: 1fr;
+        flex-direction: column;
+        align-items: stretch;
+    }
+}
