@@ -10,6 +10,7 @@ interface User { id: number; email: string; role: 'patient' | 'admin'; [key: str
 
 interface AuthContextType {
     isAuthenticated: boolean;
+    loading: boolean;
     user: User | null;
     login: (email: string, password: string) => Promise<void>;
     adminLogin: (email: string, password: string) => Promise<void>;
@@ -28,17 +29,28 @@ const normalizeRole = (role?: string): 'patient' | 'admin' => {
 export function AuthProvider({ children }: { children: ReactNode }) {
     const [isAuthenticated, setIsAuthenticated] = useState(false);
     const [user, setUser] = useState<User | null>(null);
+    const [loading, setLoading] = useState(true);
 
     useEffect(() => {
-        fetch("/api/auth/verify", { credentials: 'include' })
+        fetch("/api/auth/verify", { credentials: "include" })
             .then(res => res.ok ? res.json() : null)
             .then(data => {
                 if (data?.user) {
                     setIsAuthenticated(true);
                     setUser({ ...data.user, role: normalizeRole(data.user.role) });
+                } else {
+                    setIsAuthenticated(false);
+                    setUser(null);
                 }
             })
-            .catch(err => console.warn("⚠️ Verify failed:", err));
+            .catch(err => {
+                console.warn("⚠️ Verify failed:", err);
+                setIsAuthenticated(false);
+                setUser(null);
+            })
+            .finally(() => {
+                setLoading(false);
+            });
     }, []);
 
     const login = async (email: string, password: string) => {
@@ -113,7 +125,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     };
 
     return (
-        <AuthContext.Provider value={{ isAuthenticated, user, login, adminLogin, register, resetPassword, logout }}>
+        <AuthContext.Provider value={{ isAuthenticated, user, loading, login, adminLogin, register, resetPassword, logout }}>
             {children}
         </AuthContext.Provider>
     );
